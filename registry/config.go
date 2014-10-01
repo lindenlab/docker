@@ -18,6 +18,7 @@ import (
 type Options struct {
 	Mirrors            opts.ListOpts
 	InsecureRegistries opts.ListOpts
+	FullyQualifiedCmds opts.StringSetOpts
 }
 
 const (
@@ -44,6 +45,10 @@ func IndexServerName() string {
 	return INDEXNAME
 }
 
+var (
+	ValidFullyQualifiedCmds = []string{"pull", "push", "search", "login"}
+)
+
 // InstallFlags adds command-line options to the top-level flag parser for
 // the current process.
 func (options *Options) InstallFlags() {
@@ -51,6 +56,8 @@ func (options *Options) InstallFlags() {
 	flag.Var(&options.Mirrors, []string{"-registry-mirror"}, "Preferred Docker registry mirror")
 	options.InsecureRegistries = opts.NewListOpts(ValidateIndexName)
 	flag.Var(&options.InsecureRegistries, []string{"-insecure-registry"}, "Enable insecure registry communication")
+	options.FullyQualifiedCmds = opts.NewStringSetOpts(ValidateFullyQualifiedCmd)
+	flag.Var(&options.FullyQualifiedCmds, []string{"-force-fully-qualified"}, fmt.Sprintf("Force Docker commands to use fully qualified image names.  Valid commands: %s,all", strings.Join(ValidFullyQualifiedCmds, ",")))
 }
 
 type netIPNet net.IPNet
@@ -74,6 +81,38 @@ func (ipnet *netIPNet) UnmarshalJSON(b []byte) (err error) {
 type ServiceConfig struct {
 	InsecureRegistryCIDRs []*netIPNet           `json:"InsecureRegistryCIDRs"`
 	IndexConfigs          map[string]*IndexInfo `json:"IndexConfigs"`
+	JobPolicies        map[string]*JobPolicy `json:"job_policies"`
+}
+
+// Validates a fully qualified command list
+func ValidateFullyQualifiedCmd(val string) ([]string, error) {
+	if val == "all" {
+		var cmds []string
+		for _, cmd := range ValidFullyQualifiedCmds {
+			if cmd != "all" {
+				cmds = append(cmds, cmd)
+			}
+		}
+		return cmds, nil
+	}
+	for _, str := range ValidFullyQualifiedCmds {
+		if val == str {
+			return []string{val}, nil
+		}
+	}
+	return []string{}, fmt.Errorf("%s is not a valid force-fully-qualified command", val)
+}
+
+type JobPolicy struct {
+	ForceQualified bool `json:"force_qualified"`
+}
+
+func (config *ServiceConfig) GetJobPolicy(jobName string) (*JobPolicy, error) {
+	jobPolicy := config.JobPolicies[jobName]
+	if jobPolicy == nil {
+		return nil, fmt.Errorf("Job name '%s' has no policy!", jobName)
+	}
+	return jobPolicy, nil
 }
 
 // NewServiceConfig returns a new instance of ServiceConfig
@@ -82,6 +121,7 @@ func NewServiceConfig(options *Options) *ServiceConfig {
 		options = &Options{
 			Mirrors:            opts.NewListOpts(nil),
 			InsecureRegistries: opts.NewListOpts(nil),
+			FullyQualifiedCmds: opts.NewStringSetOpts(nil),
 		}
 	}
 
@@ -95,6 +135,7 @@ func NewServiceConfig(options *Options) *ServiceConfig {
 	config := &ServiceConfig{
 		InsecureRegistryCIDRs: make([]*netIPNet, 0),
 		IndexConfigs:          make(map[string]*IndexInfo, 0),
+		JobPolicies:           make(map[string]*JobPolicy),
 	}
 	// Split --insecure-registry into CIDR and registry-specific settings.
 	for _, r := range options.InsecureRegistries.GetAll() {
@@ -112,6 +153,15 @@ func NewServiceConfig(options *Options) *ServiceConfig {
 				Official: false,
 			}
 		}
+	}
+	// Configure JobPolicies from FullyQualifiedCmds settings.
+	for _, k := range ValidFullyQualifiedCmds {
+		config.JobPolicies[k] = &JobPolicy{
+			ForceQualified: options.FullyQualifiedCmds.Get(k),
+		}
+	}
+	config.JobPolicies["parse"] = &JobPolicy{
+		ForceQualified: false,
 	}
 
 	// Configure public registry.
@@ -297,27 +347,46 @@ func (index *IndexInfo) GetAuthConfigKey() string {
 	return index.Name
 }
 
-// splitReposName breaks a reposName into an index name and remote name
-func splitReposName(reposName string) (string, string) {
+func isFullyQualifiedReposName(reposName string) bool {
 	nameParts := strings.SplitN(reposName, "/", 2)
-	var indexName, remoteName string
-	if len(nameParts) == 1 || (!strings.Contains(nameParts[0], ".") &&
-		!strings.Contains(nameParts[0], ":") && nameParts[0] != "localhost") {
+	if len(nameParts) == 1 || (!strings.Contains(nameParts[0], ".") && !strings.Contains(nameParts[0], ":") &&
+		nameParts[0] != "localhost" && !strings.HasPrefix(nameParts[0], "localhost:")) {
+		return false
+	}
+	return true
+}
+
+// splitReposName breaks a reposName into an index name and remote name
+func splitReposName(reposName string) (indexName string, remoteName string) {
+	if isFullyQualifiedReposName(reposName) {
+		nameParts := strings.SplitN(reposName, "/", 2)
+		indexName = nameParts[0]
+		remoteName = nameParts[1]
+	} else {
 		// This is a Docker Index repos (ex: samalba/hipache or ubuntu)
 		// 'docker.io'
 		indexName = IndexServerName()
 		remoteName = reposName
-	} else {
-		indexName = nameParts[0]
-		remoteName = nameParts[1]
 	}
-	return indexName, remoteName
+	return
 }
 
 // NewRepositoryInfo validates and breaks down a repository name into a RepositoryInfo
-func (config *ServiceConfig) NewRepositoryInfo(reposName string) (*RepositoryInfo, error) {
+func (config *ServiceConfig) NewRepositoryInfo(reposName string, context string) (*RepositoryInfo, error) {
 	if err := validateNoSchema(reposName); err != nil {
 		return nil, err
+	}
+
+	jobPolicy := config.JobPolicies[context]
+	if jobPolicy == nil {
+        return nil, fmt.Errorf("Command '%s' has no policy!", context)
+	}
+
+	if jobPolicy.ForceQualified && !isFullyQualifiedReposName(reposName) {
+		if err := validateRemoteName(reposName); err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("Missing registry name, try \"%s/%s\" instead", IndexServerName(), reposName)
 	}
 
 	indexName, remoteName := splitReposName(reposName)
@@ -376,7 +445,7 @@ func (repoInfo *RepositoryInfo) GetSearchTerm() string {
 // ParseRepositoryInfo performs the breakdown of a repository name into a RepositoryInfo, but
 // lacks registry configuration.
 func ParseRepositoryInfo(reposName string) (*RepositoryInfo, error) {
-	return emptyServiceConfig.NewRepositoryInfo(reposName)
+	return emptyServiceConfig.NewRepositoryInfo(reposName, "parse")
 }
 
 // NormalizeLocalName transforms a repository name into a normalize LocalName
