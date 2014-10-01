@@ -450,7 +450,7 @@ func (b *Builder) pullImage(name string) (*imagepkg.Image, error) {
 	pullRegistryAuth := &cliconfig.AuthConfig{}
 	if len(b.AuthConfigs) > 0 {
 		// The request came with a full auth config file, we prefer to use that
-		repoInfo, err := b.Daemon.RegistryService.ResolveRepository(remote)
+		repoInfo, err := b.Daemon.RegistryService.ResolveRepository(remote, "pull")
 		if err != nil {
 			return nil, err
 		}

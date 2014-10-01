@@ -56,10 +56,19 @@ func (daemon *Daemon) SystemInfo() (*types.Info, error) {
 		initPath = daemon.SystemInitPath()
 	}
 
+	registryConfig := daemon.RegistryService.Config
+	fullyQualifiedCommands := make([]string, 0)
+	for key, value := range registryConfig.JobPolicies {
+		if value.ForceQualified {
+			fullyQualifiedCommands = append(fullyQualifiedCommands, key)
+		}
+	}
+
 	v := &types.Info{
 		ID:                 daemon.ID,
 		Containers:         len(daemon.List()),
 		Images:             imgcount,
+		FullyQualifiedCommands: fullyQualifiedCommands,
 		Driver:             daemon.GraphDriver().String(),
 		DriverStatus:       daemon.GraphDriver().Status(),
 		MemoryLimit:        daemon.SystemConfig().MemoryLimit,
@@ -78,6 +87,7 @@ func (daemon *Daemon) SystemInfo() (*types.Info, error) {
 		KernelVersion:      kernelVersion,
 		OperatingSystem:    operatingSystem,
 		IndexServerAddress: registry.IndexServerAddress(),
+		IndexServerName:    registry.IndexServerName(),
 		RegistryConfig:     daemon.RegistryService.Config,
 		InitSha1:           dockerversion.INITSHA1,
 		InitPath:           initPath,

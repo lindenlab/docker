@@ -21,7 +21,7 @@ import (
 //
 // Usage: docker login SERVER
 func (cli *DockerCli) CmdLogin(args ...string) error {
-	cmd := cli.Subcmd("login", "[SERVER]", "Register or log in to a Docker registry server, if no server is\nspecified \""+registry.IndexServerAddress()+"\" is the default.", true)
+	cmd := cli.Subcmd("login", "[SERVER]", "Register or log in to a Docker registry server, if no server is\nspecified \""+registry.IndexServerName()+"\" is the default.", true)
 	cmd.Require(flag.Max, 1)
 
 	var username, password, email string
@@ -32,9 +32,22 @@ func (cli *DockerCli) CmdLogin(args ...string) error {
 
 	cmd.ParseFlags(args, true)
 
+	fqnCommands, err := cli.QueryFQNCommands()
+	if err != nil {
+		fmt.Fprintln(cli.out, err.Error())
+		os.Exit(1)
+	}
+	// Disallow login with no serverAddress if daemon requires this.
+	if fqnCommands["login"] && len(cmd.Args()) == 0 {
+		fmt.Fprintf(cli.out, "Error: Missing registry name, try \"%s\" instead\n", registry.IndexServerName())
+		os.Exit(1)
+	}
 	serverAddress := registry.IndexServerAddress()
 	if len(cmd.Args()) > 0 {
 		serverAddress = cmd.Arg(0)
+		if serverAddress == registry.IndexServerName() {
+			serverAddress = registry.IndexServerAddress()
+		}
 	}
 
 	promptDefault := func(prompt string, configDefault string) {
@@ -42,6 +55,14 @@ func (cli *DockerCli) CmdLogin(args ...string) error {
 			fmt.Fprintf(cli.out, "%s: ", prompt)
 		} else {
 			fmt.Fprintf(cli.out, "%s (%s): ", prompt, configDefault)
+		}
+	}
+
+	firstPrompt := true
+	promptServerOnce := func() {
+		if firstPrompt {
+			fmt.Fprintf(cli.out, "Server: %s\n", serverAddress)
+			firstPrompt = false
 		}
 	}
 
@@ -61,6 +82,7 @@ func (cli *DockerCli) CmdLogin(args ...string) error {
 	}
 
 	if username == "" {
+		promptServerOnce()
 		promptDefault("Username", authconfig.Username)
 		username = readInput(cli.in, cli.out)
 		username = strings.Trim(username, " ")
@@ -76,6 +98,7 @@ func (cli *DockerCli) CmdLogin(args ...string) error {
 			if err != nil {
 				return err
 			}
+			promptServerOnce()
 			fmt.Fprintf(cli.out, "Password: ")
 			term.DisableEcho(cli.inFd, oldState)
 
@@ -89,6 +112,7 @@ func (cli *DockerCli) CmdLogin(args ...string) error {
 		}
 
 		if email == "" {
+			promptServerOnce()
 			promptDefault("Email", authconfig.Email)
 			email = readInput(cli.in, cli.out)
 			if email == "" {

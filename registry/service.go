@@ -42,7 +42,7 @@ func (s *Service) Auth(authConfig *cliconfig.AuthConfig) (string, error) {
 // Search queries the public registry for images matching the specified
 // search terms, and returns the results.
 func (s *Service) Search(term string, authConfig *cliconfig.AuthConfig, headers map[string][]string) (*SearchResults, error) {
-	repoInfo, err := s.ResolveRepository(term)
+	repoInfo, err := s.ResolveRepository(term, "search")
 	if err != nil {
 		return nil, err
 	}
@@ -61,8 +61,8 @@ func (s *Service) Search(term string, authConfig *cliconfig.AuthConfig, headers 
 
 // ResolveRepository splits a repository name into its components
 // and configuration of the associated registry.
-func (s *Service) ResolveRepository(name string) (*RepositoryInfo, error) {
-	return s.Config.NewRepositoryInfo(name)
+func (s *Service) ResolveRepository(name string, context string) (*RepositoryInfo, error) {
+	return s.Config.NewRepositoryInfo(name, context)
 }
 
 // ResolveIndex takes indexName and returns index info

@@ -500,7 +500,7 @@ func (s *TagStore) Push(localName string, imagePushConfig *ImagePushConfig) erro
 	)
 
 	// Resolve the Repository name from fqn to RepositoryInfo
-	repoInfo, err := s.registryService.ResolveRepository(localName)
+	repoInfo, err := s.registryService.ResolveRepository(localName, "push")
 	if err != nil {
 		return err
 	}
