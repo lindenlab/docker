@@ -1426,6 +1426,9 @@ func serveFd(addr string, job *engine.Job) error {
 }
 
 func lookupGidByName(nameOrGid string) (int, error) {
+	if gid, err := strconv.ParseInt(nameOrGid, 0, 16); err == nil {
+		return int(gid), nil
+	}
 	groupFile, err := user.GetGroupPath()
 	if err != nil {
 		return -1, err
