@@ -2,7 +2,6 @@ package client
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,7 +21,6 @@ import (
 	"github.com/docker/docker/pkg/signal"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/docker/pkg/term"
-	"github.com/docker/docker/registry"
 	"github.com/docker/docker/utils"
 )
 
@@ -54,7 +52,7 @@ func (cli *DockerCli) encodeData(data interface{}) (*bytes.Buffer, error) {
 	return params, nil
 }
 
-func (cli *DockerCli) call(method, path string, data interface{}, passAuthInfo bool) (io.ReadCloser, int, error) {
+func (cli *DockerCli) call(method, path string, data interface{}, headers map[string][]string) (io.ReadCloser, int, error) {
 	params, err := cli.encodeData(data)
 	if err != nil {
 		return nil, -1, err
@@ -63,26 +61,6 @@ func (cli *DockerCli) call(method, path string, data interface{}, passAuthInfo b
 	if err != nil {
 		return nil, -1, err
 	}
-	if passAuthInfo {
-		cli.LoadConfigFile()
-		// Resolve the Auth config relevant for this server
-		authConfig := cli.configFile.Configs[registry.IndexServerAddress()]
-		getHeaders := func(authConfig registry.AuthConfig) (map[string][]string, error) {
-			buf, err := json.Marshal(authConfig)
-			if err != nil {
-				return nil, err
-			}
-			registryAuthHeader := []string{
-				base64.URLEncoding.EncodeToString(buf),
-			}
-			return map[string][]string{"X-Registry-Auth": registryAuthHeader}, nil
-		}
-		if headers, err := getHeaders(authConfig); err == nil && headers != nil {
-			for k, v := range headers {
-				req.Header[k] = v
-			}
-		}
-	}
 	req.Header.Set("User-Agent", "Docker-Client/"+dockerversion.VERSION)
 	req.URL.Host = cli.addr
 	req.URL.Scheme = cli.scheme
@@ -90,6 +68,12 @@ func (cli *DockerCli) call(method, path string, data interface{}, passAuthInfo b
 		req.Header.Set("Content-Type", "application/json")
 	} else if method == "POST" {
 		req.Header.Set("Content-Type", "text/plain")
+	}
+
+	if headers != nil {
+		for k, v := range headers {
+			req.Header[k] = v
+		}
 	}
 	resp, err := cli.HTTPClient().Do(req)
 	if err != nil {
@@ -195,13 +179,13 @@ func (cli *DockerCli) resizeTty(id string, isExec bool) {
 		path = "/exec/" + id + "/resize?"
 	}
 
-	if _, _, err := readBody(cli.call("POST", path+v.Encode(), nil, false)); err != nil {
+	if _, _, err := readBody(cli.call("POST", path+v.Encode(), nil, nil)); err != nil {
 		log.Debugf("Error resize: %s", err)
 	}
 }
 
 func waitForExit(cli *DockerCli, containerId string) (int, error) {
-	stream, _, err := cli.call("POST", "/containers/"+containerId+"/wait", nil, false)
+	stream, _, err := cli.call("POST", "/containers/"+containerId+"/wait", nil, nil)
 	if err != nil {
 		return -1, err
 	}
@@ -216,7 +200,7 @@ func waitForExit(cli *DockerCli, containerId string) (int, error) {
 // getExitCode perform an inspect on the container. It returns
 // the running state and the exit code.
 func getExitCode(cli *DockerCli, containerId string) (bool, int, error) {
-	stream, _, err := cli.call("GET", "/containers/"+containerId+"/json", nil, false)
+	stream, _, err := cli.call("GET", "/containers/"+containerId+"/json", nil, nil)
 	if err != nil {
 		// If we can't connect, then the daemon probably died.
 		if err != ErrConnectionRefused {
@@ -237,7 +221,7 @@ func getExitCode(cli *DockerCli, containerId string) (bool, int, error) {
 // getExecExitCode perform an inspect on the exec command. It returns
 // the running state and the exit code.
 func getExecExitCode(cli *DockerCli, execId string) (bool, int, error) {
-	stream, _, err := cli.call("GET", "/exec/"+execId+"/json", nil, false)
+	stream, _, err := cli.call("GET", "/exec/"+execId+"/json", nil, nil)
 	if err != nil {
 		// If we can't connect, then the daemon probably died.
 		if err != ErrConnectionRefused {
