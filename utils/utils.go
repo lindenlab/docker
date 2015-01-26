@@ -291,6 +291,14 @@ func NewHTTPRequestError(msg string, res *http.Response) error {
 	}
 }
 
+func NewHTTPError(statusCode int, err error) error {
+	return &JSONError{
+		Message: err.Error(),
+		Code: statusCode,
+	}
+}
+
+
 // An StatusError reports an unsuccessful exit by a command.
 type StatusError struct {
 	Status     string

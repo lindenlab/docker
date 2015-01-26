@@ -114,30 +114,39 @@ func parseMultipartForm(r *http.Request) error {
 	return nil
 }
 
-func httpError(w http.ResponseWriter, err error) {
-	statusCode := http.StatusInternalServerError
-	// FIXME: this is brittle and should not be necessary.
-	// If we need to differentiate between different possible error types, we should
-	// create appropriate error types with clearly defined meaning.
-	errStr := strings.ToLower(err.Error())
-	if strings.Contains(errStr, "no such") {
-		statusCode = http.StatusNotFound
-	} else if strings.Contains(errStr, "bad parameter") {
-		statusCode = http.StatusBadRequest
-	} else if strings.Contains(errStr, "conflict") {
-		statusCode = http.StatusConflict
-	} else if strings.Contains(errStr, "impossible") {
-		statusCode = http.StatusNotAcceptable
-	} else if strings.Contains(errStr, "wrong login/password") {
-		statusCode = http.StatusUnauthorized
-	} else if strings.Contains(errStr, "hasn't been activated") {
-		statusCode = http.StatusForbidden
+func handleHttpError(w http.ResponseWriter, err error) {
+	if err == nil {
+		return
 	}
 
-	if err != nil {
-		log.Errorf("HTTP Error: statusCode=%d %s", statusCode, err.Error())
-		http.Error(w, err.Error(), statusCode)
+	statusCode := http.StatusInternalServerError
+
+	// If this is a JSONError, use the given status code.
+	if jsonerr, ok := err.(*utils.JSONError); ok {
+		statusCode = jsonerr.Code
+	} else {
+		// Fall back to parsing error strings.
+		// FIXME: this is brittle and should not be necessary.
+		// If we need to differentiate between different possible error types, we should
+		// create appropriate error types with clearly defined meaning.
+		errStr := strings.ToLower(err.Error())
+		if strings.Contains(errStr, "no such") {
+			statusCode = http.StatusNotFound
+		} else if strings.Contains(errStr, "bad parameter") {
+			statusCode = http.StatusBadRequest
+		} else if strings.Contains(errStr, "conflict") {
+			statusCode = http.StatusConflict
+		} else if strings.Contains(errStr, "impossible") {
+			statusCode = http.StatusNotAcceptable
+		} else if strings.Contains(errStr, "wrong login/password") {
+			statusCode = http.StatusUnauthorized
+		} else if strings.Contains(errStr, "hasn't been activated") {
+			statusCode = http.StatusForbidden
+		}
 	}
+
+	log.Errorf("HTTP Error: statusCode=%d %s", statusCode, err.Error())
+	http.Error(w, err.Error(), statusCode)
 }
 
 func writeJSON(w http.ResponseWriter, code int, v engine.Env) error {
@@ -1260,7 +1269,7 @@ func makeHttpHandler(eng *engine.Engine, logging bool, localMethod string, local
 
 		if err := handlerFunc(eng, version, w, r, mux.Vars(r)); err != nil {
 			log.Errorf("Handler for %s %s returned error: %s", localMethod, localRoute, err)
-			httpError(w, err)
+			handleHttpError(w, err)
 		}
 	}
 }

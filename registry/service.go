@@ -120,6 +120,7 @@ func (s *Service) Search(job *engine.Job) engine.Status {
 	}
 	results, err := r.SearchRepositories(repoInfo.GetSearchTerm())
 	if err != nil {
+		
 		return job.Error(err)
 	}
 	outs := engine.NewTable("star_count", 0)

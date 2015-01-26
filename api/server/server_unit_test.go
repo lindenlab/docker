@@ -41,20 +41,33 @@ func TestGetBoolParam(t *testing.T) {
 	}
 }
 
-func TesthttpError(t *testing.T) {
+func TestHandleHttpError(t *testing.T) {
 	r := httptest.NewRecorder()
-
-	httpError(r, fmt.Errorf("No such method"))
+	handleHttpError(r, fmt.Errorf("No such method"))
 	if r.Code != http.StatusNotFound {
 		t.Fatalf("Expected %d, got %d", http.StatusNotFound, r.Code)
 	}
 
-	httpError(r, fmt.Errorf("This accound hasn't been activated"))
+	r = httptest.NewRecorder()
+	handleHttpError(r, engine.NewHttpError(http.StatusNotFound, fmt.Errorf("Some error")))
+	if r.Code != http.StatusNotFound {
+		t.Fatalf("Expected %d, got %d", http.StatusNotFound, r.Code)
+	}
+
+	r = httptest.NewRecorder()
+	handleHttpError(r, fmt.Errorf("This account hasn't been activated"))
 	if r.Code != http.StatusForbidden {
 		t.Fatalf("Expected %d, got %d", http.StatusForbidden, r.Code)
 	}
 
-	httpError(r, fmt.Errorf("Some error"))
+	r = httptest.NewRecorder()
+	handleHttpError(r, engine.NewHttpError(http.StatusForbidden, fmt.Errorf("Some error")))
+	if r.Code != http.StatusForbidden {
+		t.Fatalf("Expected %d, got %d", http.StatusForbidden, r.Code)
+	}
+
+	r = httptest.NewRecorder()
+	handleHttpError(r, fmt.Errorf("Some error"))
 	if r.Code != http.StatusInternalServerError {
 		t.Fatalf("Expected %d, got %d", http.StatusInternalServerError, r.Code)
 	}

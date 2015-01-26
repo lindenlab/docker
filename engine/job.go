@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/docker/docker/utils"
 )
 
 // A job is the fundamental unit of work in the docker engine.
@@ -32,6 +34,7 @@ type Job struct {
 	Stdin   *Input
 	handler Handler
 	status  Status
+	HttpStatus int
 	end     time.Time
 	closeIO bool
 }
@@ -41,7 +44,7 @@ type Status int
 const (
 	StatusOK       Status = 0
 	StatusErr      Status = 1
-	StatusNotFound Status = 127
+	//StatusNotFound Status = 127
 )
 
 // Run executes the job and blocks until the job completes.
@@ -49,7 +52,7 @@ const (
 // which includes the status.
 func (job *Job) Run() error {
 	if job.Eng.IsShutdown() && !job.GetenvBool("overrideShutdown") {
-		return fmt.Errorf("engine is shutdown")
+		return utils.NewHTTPError(http.StatusInternalServerError, fmt.Errorf("engine is shutdown"))
 	}
 	// FIXME: this is a temporary workaround to avoid Engine.Shutdown
 	// waiting 5 seconds for server/api.ServeApi to complete (which it never will)
@@ -65,7 +68,7 @@ func (job *Job) Run() error {
 	// FIXME: make this thread-safe
 	// FIXME: implement wait
 	if !job.end.IsZero() {
-		return fmt.Errorf("%s: job has already completed", job.Name)
+		return utils.NewHTTPError(http.StatusInternalServerError, fmt.Errorf("%s: job has already completed", job.Name))
 	}
 	// Log beginning and end of the job
 	if job.Eng.Logging {
@@ -77,8 +80,8 @@ func (job *Job) Run() error {
 	var errorMessage = bytes.NewBuffer(nil)
 	job.Stderr.Add(errorMessage)
 	if job.handler == nil {
-		job.Errorf("%s: command not found", job.Name)
-		job.status = 127
+		job.status = job.HttpErrorf(http.StatusNotFound, "%s: command not found", job.Name)
+		//job.status = 127
 	} else {
 		job.status = job.handler(job)
 		job.end = time.Now()
@@ -86,17 +89,17 @@ func (job *Job) Run() error {
 	if job.closeIO {
 		// Wait for all background tasks to complete
 		if err := job.Stdout.Close(); err != nil {
-			return err
+			return utils.NewHTTPError(http.StatusInternalServerError, err)
 		}
 		if err := job.Stderr.Close(); err != nil {
-			return err
+			return utils.NewHTTPError(http.StatusInternalServerError, err)
 		}
 		if err := job.Stdin.Close(); err != nil {
-			return err
+			return utils.NewHTTPError(http.StatusInternalServerError, err)
 		}
 	}
 	if job.status != 0 {
-		return fmt.Errorf("%s", Tail(errorMessage, 1))
+		return utils.NewHTTPError(job.HttpStatus, fmt.Errorf("%s", Tail(errorMessage, 1)))
 	}
 
 	return nil
@@ -220,7 +223,14 @@ func (job *Job) Printf(format string, args ...interface{}) (n int, err error) {
 	return fmt.Fprintf(job.Stdout, format, args...)
 }
 
-func (job *Job) Errorf(format string, args ...interface{}) Status {
+func (job *Job) HttpError(statusCode int, err error) Status {
+	job.HttpStatus = statusCode
+	fmt.Fprintf(job.Stderr, "%s\n", err)
+	return StatusErr
+}
+
+func (job *Job) HttpErrorf(statusCode int, format string, args ...interface{}) Status {
+	job.HttpStatus = statusCode
 	if format[len(format)-1] != '\n' {
 		format = format + "\n"
 	}
@@ -229,9 +239,18 @@ func (job *Job) Errorf(format string, args ...interface{}) Status {
 }
 
 func (job *Job) Error(err error) Status {
-	fmt.Fprintf(job.Stderr, "%s\n", err)
-	return StatusErr
+	// If this is a JSONError, use the given status code.
+	statusCode := http.StatusInternalServerError
+	if jsonerr, ok := err.(*utils.JSONError); ok {
+		statusCode = jsonerr.Code
+	}
+	return job.HttpError(statusCode, err)
 }
+
+func (job *Job) Errorf(format string, args ...interface{}) Status {
+	return job.HttpErrorf(http.StatusInternalServerError, format, args...)
+}
+
 
 func (job *Job) StatusCode() int {
 	return int(job.status)

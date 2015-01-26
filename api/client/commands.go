@@ -1215,32 +1215,11 @@ func (cli *DockerCli) CmdPush(args ...string) error {
 	v := url.Values{}
 	v.Set("tag", tag)
 
-	push := func(authConfig registry.AuthConfig) error {
-		buf, err := json.Marshal(authConfig)
-		if err != nil {
-			return err
-		}
-		registryAuthHeader := []string{
-			base64.URLEncoding.EncodeToString(buf),
-		}
-
-		return cli.stream("POST", "/images/"+remote+"/push?"+v.Encode(), nil, cli.out, map[string][]string{
-			"X-Registry-Auth": registryAuthHeader,
-		})
-	}
-
-	if err := push(authConfig); err != nil {
-		if strings.Contains(err.Error(), "Status 401") {
-			fmt.Fprintln(cli.out, "\nPlease login prior to push:")
-			if err := cli.CmdLogin(repoInfo.Index.GetAuthConfigKey()); err != nil {
-				return err
-			}
-			authConfig := cli.configFile.ResolveAuthConfig(repoInfo.Index)
-			return push(authConfig)
-		}
+	body, contentType, _, err := cli.clientRequestAttemptLogin("POST", "/images/"+remote+"/push?"+v.Encode(), nil, repoInfo.Index, "push")
+	if err != nil {
 		return err
 	}
-	return nil
+	return cli.streamBody(body, contentType, true, cli.out, nil)
 }
 
 func (cli *DockerCli) CmdPull(args ...string) error {
@@ -1273,36 +1252,11 @@ func (cli *DockerCli) CmdPull(args ...string) error {
 
 	cli.LoadConfigFile()
 
-	// Resolve the Auth config relevant for this server
-	authConfig := cli.configFile.ResolveAuthConfig(repoInfo.Index)
-
-	pull := func(authConfig registry.AuthConfig) error {
-		buf, err := json.Marshal(authConfig)
-		if err != nil {
-			return err
-		}
-		registryAuthHeader := []string{
-			base64.URLEncoding.EncodeToString(buf),
-		}
-
-		return cli.stream("POST", "/images/create?"+v.Encode(), nil, cli.out, map[string][]string{
-			"X-Registry-Auth": registryAuthHeader,
-		})
-	}
-
-	if err := pull(authConfig); err != nil {
-		if strings.Contains(err.Error(), "Status 401") {
-			fmt.Fprintln(cli.out, "\nPlease login prior to pull:")
-			if err := cli.CmdLogin(repoInfo.Index.GetAuthConfigKey()); err != nil {
-				return err
-			}
-			authConfig := cli.configFile.ResolveAuthConfig(repoInfo.Index)
-			return pull(authConfig)
-		}
+	body, contentType, _, err := cli.clientRequestAttemptLogin("POST", "/images/create?"+v.Encode(), nil, repoInfo.Index, "pull")
+	if err != nil {
 		return err
 	}
-
-	return nil
+	return cli.streamBody(body, contentType, true, cli.out, nil)
 }
 
 func (cli *DockerCli) CmdImages(args ...string) error {
@@ -1975,38 +1929,14 @@ func (cli *DockerCli) CmdSearch(args ...string) error {
 
 	cli.LoadConfigFile()
 
-	// Resolve the Auth config relevant for this server
-	authConfig := cli.configFile.ResolveAuthConfig(repoInfo.Index)
-
-	search := func(authConfig registry.AuthConfig) ([]byte, int, error) {
-		buf, err := json.Marshal(authConfig)
-		if err != nil {
-			return nil, -1, err
-		}
-		registryAuthHeader := []string{
-			base64.URLEncoding.EncodeToString(buf),
-		}
-
-		return readBody(cli.call("GET", "/images/search?"+v.Encode(), nil, map[string][]string{
-			"X-Registry-Auth": registryAuthHeader,
-		}))
-	}
-
-	body, _, err := search(authConfig)
-	if err != nil && strings.Contains(err.Error(), "status code 401") {
-		fmt.Fprintln(cli.out, "\nPlease login prior to search:")
-		if err = cli.CmdLogin(repoInfo.Index.GetAuthConfigKey()); err != nil {
-			return err
-		}
-		authConfig = cli.configFile.ResolveAuthConfig(repoInfo.Index)
-		body, _, err = search(authConfig)
-	}
+	body, _, statusCode, errReq := cli.clientRequestAttemptLogin("GET", "/images/search?"+v.Encode(), nil, repoInfo.Index, "search")
+	rawBody, _, err := readBody(body, statusCode, errReq)
 	if err != nil {
 		return err
 	}
 
 	outs := engine.NewTable("star_count", 0)
-	if _, err := outs.ReadListFrom(body); err != nil {
+	if _, err := outs.ReadListFrom(rawBody); err != nil {
 		return err
 	}
 	w := tabwriter.NewWriter(cli.out, 10, 1, 3, ' ', 0)

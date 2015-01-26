@@ -24,14 +24,14 @@ func TestJobStatusErr(t *testing.T) {
 	}
 }
 
-func TestJobStatusNotFound(t *testing.T) {
-	eng := New()
-	eng.Register("return_not_found", func(job *Job) Status { return StatusNotFound })
-	err := eng.Job("return_not_found").Run()
-	if err == nil {
-		t.Fatalf("When a job returns StatusNotFound, Run() should return an error")
-	}
-}
+//func TestJobStatusNotFound(t *testing.T) {
+//	eng := New()
+//	eng.Register("return_not_found", func(job *Job) Status { return StatusNotFound })
+//	err := eng.Job("return_not_found").Run()
+//	if err == nil {
+//		t.Fatalf("When a job returns StatusNotFound, Run() should return an error")
+//	}
+//}
 
 func TestJobStdoutString(t *testing.T) {
 	eng := New()
