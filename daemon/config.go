@@ -34,6 +34,7 @@ type CommonConfig struct {
 	TrustKeyPath   string
 	DefaultNetwork string
 	NetworkKVStore string
+	HostNameMappings []string
 }
 
 // InstallCommonFlags adds command-line options to the top-level flag parser for
@@ -52,6 +53,7 @@ func (config *Config) InstallCommonFlags() {
 	flag.IntVar(&config.Mtu, []string{"#mtu", "-mtu"}, 0, "Set the containers network MTU")
 	flag.BoolVar(&config.EnableCors, []string{"#api-enable-cors", "#-api-enable-cors"}, false, "Enable CORS headers in the remote API, this is deprecated by --api-cors-header")
 	flag.StringVar(&config.CorsHeaders, []string{"-api-cors-header"}, "", "Set CORS headers in the remote API")
+	opts.ExtraHostsListVar(&config.HostNameMappings, []string{"-publish-hostname"}, "Add a custom IP-to-hostname mapping (host:ip)")
 	// FIXME: why the inconsistency between "hosts" and "sockets"?
 	opts.IPListVar(&config.Dns, []string{"#dns", "-dns"}, "DNS server to use")
 	opts.DnsSearchListVar(&config.DnsSearch, []string{"-dns-search"}, "DNS search domains to use")

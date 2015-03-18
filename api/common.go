@@ -49,12 +49,16 @@ func DisplayablePorts(ports []types.Port) string {
 			firstInGroup int
 			lastInGroup  int
 		)
-		if port.IP != "" {
+		hostName := port.HostName
+		if hostName == "" {
+			hostName = port.IP
+		}
+		if hostName != "" {
 			if port.PublicPort != current {
-				hostMappings = append(hostMappings, fmt.Sprintf("%s:%d->%d/%s", port.IP, port.PublicPort, port.PrivatePort, port.Type))
+				hostMappings = append(hostMappings, fmt.Sprintf("%s:%d->%d/%s", hostName, port.PublicPort, port.PrivatePort, port.Type))
 				continue
 			}
-			portKey = fmt.Sprintf("%s/%s", port.IP, port.Type)
+			portKey = fmt.Sprintf("%s/%s", hostName, port.Type)
 		}
 		firstInGroup = firstInGroupMap[portKey]
 		lastInGroup = lastInGroupMap[portKey]

@@ -170,6 +170,7 @@ func (daemon *Daemon) Containers(config *ContainersConfig) ([]*types.Container, 
 					PublicPort:  h,
 					Type:        port.Proto(),
 					IP:          binding.HostIp,
+					HostName:    binding.HostName,
 				})
 			}
 		}
