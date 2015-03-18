@@ -1009,7 +1009,11 @@ func (cli *DockerCli) CmdPort(args ...string) error {
 		natPort := port + "/" + proto
 		if frontends, exists := ports[nat.Port(port+"/"+proto)]; exists && frontends != nil {
 			for _, frontend := range frontends {
-				fmt.Fprintf(cli.out, "%s:%s\n", frontend.HostIp, frontend.HostPort)
+				hostName := frontend.HostName
+				if hostName == "" {
+					hostName = frontend.HostIp
+				}
+				fmt.Fprintf(cli.out, "%s:%s\n", hostName, frontend.HostPort)
 			}
 			return nil
 		}
@@ -1018,7 +1022,11 @@ func (cli *DockerCli) CmdPort(args ...string) error {
 
 	for from, frontends := range ports {
 		for _, frontend := range frontends {
-			fmt.Fprintf(cli.out, "%s -> %s:%s\n", from, frontend.HostIp, frontend.HostPort)
+			hostName := frontend.HostName
+			if hostName == "" {
+				hostName = frontend.HostIp
+			}
+			fmt.Fprintf(cli.out, "%s -> %s:%s\n", from, hostName, frontend.HostPort)
 		}
 	}
 

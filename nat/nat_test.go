@@ -195,8 +195,8 @@ func TestParsePortSpecs(t *testing.T) {
 
 	_, _, err = ParsePortSpecs([]string{"localhost:1234:1234/tcp"})
 
-	if err == nil {
-		t.Fatal("Received no error while trying to parse a hostname instead of ip")
+	if err != nil {
+		t.Fatal("Received error while trying to parse a hostname instead of ip")
 	}
 }
 
@@ -287,7 +287,7 @@ func TestParsePortSpecsWithRange(t *testing.T) {
 
 	_, _, err = ParsePortSpecs([]string{"localhost:1234-1236:1234-1236/tcp"})
 
-	if err == nil {
-		t.Fatal("Received no error while trying to parse a hostname instead of ip")
+	if err != nil {
+		t.Fatal("Received error while trying to parse a hostname instead of ip")
 	}
 }

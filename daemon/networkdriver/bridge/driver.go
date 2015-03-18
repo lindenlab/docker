@@ -80,6 +80,7 @@ var (
 
 	defaultBindingIP  = net.ParseIP("0.0.0.0")
 	currentInterfaces = ifaces{c: make(map[string]*networkInterface)}
+	hostNameMappings = make(map[string]string)
 )
 
 func InitDriver(job *engine.Job) engine.Status {
@@ -97,7 +98,19 @@ func InitDriver(job *engine.Job) engine.Status {
 		bridgeIPv6     = "fe80::1/64"
 		fixedCIDR      = job.Getenv("FixedCIDR")
 		fixedCIDRv6    = job.Getenv("FixedCIDRv6")
+		hostNameMappingList = job.GetenvList("HostNameMappings");
 	)
+
+	hostNameMappings = make(map[string]string)
+	for _, hostNameMapping := range hostNameMappingList {
+		// allow IPv6 addresses in host mappings; only split on first ":"
+		parts := strings.SplitN(hostNameMapping, ":", 2)
+		hostName := parts[0]
+		hostIp := parts[1]
+		hostNameMappings[hostIp] = hostName
+	}
+
+	log.Debugf("Host Name Mappings: %v", hostNameMappings)
 
 	if defaultIP := job.Getenv("DefaultBindingIP"); defaultIP != "" {
 		defaultBindingIP = net.ParseIP(defaultIP)
@@ -619,7 +632,25 @@ func AllocatePort(job *engine.Job) engine.Status {
 	)
 
 	if hostIP != "" {
+		// Check ig hostIP as a valid IP address.
 		ip = net.ParseIP(hostIP)
+
+		// Fall back on treating hostIP as an interface name, and attempt a lookup.
+		if ip == nil {
+			if iface, err := net.InterfaceByName(hostIP); err == nil {
+				if addrs, err := iface.Addrs(); err == nil {
+					ip = addrs[0].(*net.IPNet).IP
+				}
+			}
+		}
+
+		// Fall back on treating hostIP as a hostname, and attempt a lookup.
+		if ip == nil {
+			if hostIPs, err := net.LookupIP(hostIP); err == nil && len(hostIPs) > 0 {
+				ip = hostIPs[0]
+			}
+		}
+
 		if ip == nil {
 			return job.Errorf("Bad parameter: invalid host ip %s", hostIP)
 		}
@@ -664,14 +695,22 @@ func AllocatePort(job *engine.Job) engine.Status {
 	network.PortMappings = append(network.PortMappings, host)
 
 	out := engine.Env{}
+	var ipString string
 	switch netAddr := host.(type) {
 	case *net.TCPAddr:
-		out.Set("HostIP", netAddr.IP.String())
+		ipString = netAddr.IP.String()
 		out.SetInt("HostPort", netAddr.Port)
 	case *net.UDPAddr:
-		out.Set("HostIP", netAddr.IP.String())
+		ipString = netAddr.IP.String()
 		out.SetInt("HostPort", netAddr.Port)
 	}
+	out.Set("HostIP", ipString)
+	hostName := hostNameMappings[ipString]
+	if hostName == "" {
+		hostName = ipString
+	}
+	out.Set("HostName", hostName)
+
 	if _, err := out.WriteTo(job.Stdout); err != nil {
 		return job.Error(err)
 	}

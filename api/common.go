@@ -35,10 +35,14 @@ func DisplayablePorts(ports *engine.Table) string {
 	ports.SetKey("PublicPort")
 	ports.Sort()
 	for _, port := range ports.Data {
-		if port.Get("IP") == "" {
+		hostName := port.Get("HostName")
+		if hostName == "" {
+			hostName = port.Get("IP")
+		}
+		if hostName == "" {
 			result = append(result, fmt.Sprintf("%d/%s", port.GetInt("PrivatePort"), port.Get("Type")))
 		} else {
-			result = append(result, fmt.Sprintf("%s:%d->%d/%s", port.Get("IP"), port.GetInt("PublicPort"), port.GetInt("PrivatePort"), port.Get("Type")))
+			result = append(result, fmt.Sprintf("%s:%d->%d/%s", hostName, port.GetInt("PublicPort"), port.GetInt("PrivatePort"), port.Get("Type")))
 		}
 	}
 	return strings.Join(result, ", ")
