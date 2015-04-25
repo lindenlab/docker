@@ -575,6 +575,7 @@ func (container *Container) AllocateNetwork() error {
 			for _, bb := range b {
 				bindings[p] = append(bindings[p], nat.PortBinding{
 					HostIp:   bb.HostIp,
+					HostName: bb.HostName,
 					HostPort: bb.HostPort,
 				})
 			}
@@ -1433,6 +1434,7 @@ func (container *Container) allocatePort(eng *engine.Engine, port nat.Port, bind
 
 		job := eng.Job("allocate_port", container.ID)
 		job.Setenv("HostIP", b.HostIp)
+		job.Setenv("HostName", b.HostName)
 		job.Setenv("HostPort", b.HostPort)
 		job.Setenv("Proto", port.Proto())
 		job.Setenv("ContainerPort", port.Port())
@@ -1445,7 +1447,12 @@ func (container *Container) allocatePort(eng *engine.Engine, port nat.Port, bind
 			return err
 		}
 		b.HostIp = portEnv.Get("HostIP")
+		b.HostName = portEnv.Get("HostName")
 		b.HostPort = portEnv.Get("HostPort")
+
+		if b.HostName == "" {
+			b.HostName = b.HostIp
+		}
 
 		binding[i] = b
 	}

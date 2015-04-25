@@ -41,7 +41,7 @@ func newPortAllocationJob(eng *engine.Engine, port int) (job *engine.Job) {
 	return
 }
 
-func newPortAllocationJobWithInvalidHostIP(eng *engine.Engine, port int) (job *engine.Job) {
+func newPortAllocationJobWithValidHostIP(eng *engine.Engine, port int) (job *engine.Job) {
 	strPort := strconv.Itoa(port)
 
 	job = eng.Job("allocate_port", "container_id")
@@ -99,9 +99,9 @@ func TestHostnameFormatChecking(t *testing.T) {
 	}
 
 	// Allocate port with invalid HostIP, expect failure with Bad Request http status
-	job = newPortAllocationJobWithInvalidHostIP(eng, freePort)
-	if res := AllocatePort(job); res == engine.StatusOK {
-		t.Fatal("Failed to check invalid HostIP")
+	job = newPortAllocationJobWithValidHostIP(eng, freePort)
+	if res := AllocatePort(job); res != engine.StatusOK {
+		t.Fatal("Failed to check valid HostIP")
 	}
 }
 

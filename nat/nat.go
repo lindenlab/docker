@@ -5,7 +5,6 @@ package nat
 
 import (
 	"fmt"
-	"net"
 	"strconv"
 	"strings"
 
@@ -19,6 +18,7 @@ const (
 
 type PortBinding struct {
 	HostIp   string
+	HostName string
 	HostPort string
 }
 
@@ -116,9 +116,6 @@ func ParsePortSpecs(ports []string) (map[Port]struct{}, map[Port][]PortBinding, 
 			hostPort      = parts["hostPort"]
 		)
 
-		if rawIp != "" && net.ParseIP(rawIp) == nil {
-			return nil, nil, fmt.Errorf("Invalid ip address: %s", rawIp)
-		}
 		if containerPort == "" {
 			return nil, nil, fmt.Errorf("No port specified: %s<empty>", rawPort)
 		}
@@ -156,6 +153,7 @@ func ParsePortSpecs(ports []string) (map[Port]struct{}, map[Port][]PortBinding, 
 
 			binding := PortBinding{
 				HostIp:   rawIp,
+				HostName: "",
 				HostPort: hostPort,
 			}
 			bslice, exists := bindings[port]

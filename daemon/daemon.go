@@ -966,6 +966,7 @@ func NewDaemonFromDirectory(config *Config, eng *engine.Engine) (*Daemon, error)
 		job.Setenv("FixedCIDR", config.FixedCIDR)
 		job.Setenv("FixedCIDRv6", config.FixedCIDRv6)
 		job.Setenv("DefaultBindingIP", config.DefaultIp.String())
+		job.SetenvList("HostNameMappings", config.HostNameMappings)
 
 		if err := job.Run(); err != nil {
 			return nil, err
