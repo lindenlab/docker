@@ -1424,6 +1424,9 @@ func ServeRequest(eng *engine.Engine, apiversion version.Version, w http.Respons
 }
 
 func lookupGidByName(nameOrGid string) (int, error) {
+	if gid, err := strconv.ParseInt(nameOrGid, 0, 16); err == nil {
+		return int(gid), nil
+	}
 	groupFile, err := user.GetGroupPath()
 	if err != nil {
 		return -1, err
