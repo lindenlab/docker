@@ -49,6 +49,7 @@ type Config struct {
 	Labels                      []string
 	Ulimits                     map[string]*ulimit.Ulimit
 	LogConfig                   runconfig.LogConfig
+	HostNameMappings            []string
 }
 
 // InstallFlags adds command-line options to the top-level flag parser for
@@ -77,6 +78,7 @@ func (config *Config) InstallFlags() {
 	flag.StringVar(&config.CorsHeaders, []string{"-api-cors-header"}, "", "Set CORS headers in the remote API")
 	opts.IPVar(&config.DefaultIp, []string{"#ip", "-ip"}, "0.0.0.0", "Default IP when binding container ports")
 	opts.ListVar(&config.GraphOptions, []string{"-storage-opt"}, "Set storage driver options")
+	opts.ExtraHostsListVar(&config.HostNameMappings, []string{"-publish-hostname"}, "Add a custom IP-to-hostname mapping (host:ip)")
 	// FIXME: why the inconsistency between "hosts" and "sockets"?
 	opts.IPListVar(&config.Dns, []string{"#dns", "-dns"}, "DNS server to use")
 	opts.DnsSearchListVar(&config.DnsSearch, []string{"-dns-search"}, "DNS search domains to use")

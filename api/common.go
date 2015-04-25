@@ -48,12 +48,16 @@ func DisplayablePorts(ports *engine.Table) string {
 			firstInGroup int
 			lastInGroup  int
 		)
-		if port.Get("IP") != "" {
+		hostName := port.Get("HostName")
+		if hostName == "" {
+			hostName = port.Get("IP")
+		}
+		if hostName != "" {
 			if port.GetInt("PublicPort") != current {
-				hostMappings = append(hostMappings, fmt.Sprintf("%s:%d->%d/%s", port.Get("IP"), port.GetInt("PublicPort"), port.GetInt("PrivatePort"), port.Get("Type")))
+				hostMappings = append(hostMappings, fmt.Sprintf("%s:%d->%d/%s", hostName, port.GetInt("PublicPort"), port.GetInt("PrivatePort"), port.Get("Type")))
 				continue
 			}
-			portKey = fmt.Sprintf("%s/%s", port.Get("IP"), port.Get("Type"))
+			portKey = fmt.Sprintf("%s/%s", hostName, port.Get("Type"))
 		}
 		firstInGroup = firstInGroupMap[portKey]
 		lastInGroup = lastInGroupMap[portKey]

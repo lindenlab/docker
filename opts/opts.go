@@ -28,6 +28,10 @@ func HostListVar(values *[]string, names []string, usage string) {
 	flag.Var(newListOptsRef(values, api.ValidateHost), names, usage)
 }
 
+func ExtraHostsListVar(values *[]string, names []string, usage string) {
+	flag.Var(newListOptsRef(values, ValidateExtraHost), names, usage)
+}
+
 func IPListVar(values *[]string, names []string, usage string) {
 	flag.Var(newListOptsRef(values, ValidateIPAddress), names, usage)
 }

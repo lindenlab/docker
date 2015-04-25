@@ -41,6 +41,7 @@ func (settings *NetworkSettings) PortMappingAPI() *engine.Table {
 			out.SetInt("PublicPort", h)
 			out.Set("Type", port.Proto())
 			out.Set("IP", binding.HostIp)
+			out.Set("HostName", binding.HostName)
 			outs.Add(out)
 		}
 	}
