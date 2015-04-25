@@ -139,10 +139,16 @@ func (s *Service) Search(job *engine.Job) engine.Status {
 // and configuration of the associated registry.
 func (s *Service) ResolveRepository(job *engine.Job) engine.Status {
 	var (
-		reposName = job.Args[0]
+		reposName  = job.Args[0]
+		cmdContext = job.Args[1]
 	)
 
-	repoInfo, err := s.Config.NewRepositoryInfo(reposName)
+	jobPolicy, err := s.Config.GetJobPolicy(cmdContext)
+	if err != nil {
+		return job.Error(err)
+	}
+
+	repoInfo, err := s.Config.NewRepositoryInfo(reposName, jobPolicy.ForceQualified)
 	if err != nil {
 		return job.Error(err)
 	}
@@ -159,7 +165,7 @@ func (s *Service) ResolveRepository(job *engine.Job) engine.Status {
 
 // Convenience wrapper for calling resolve_repository Job from a running job.
 func ResolveRepositoryInfo(jobContext *engine.Job, reposName string) (*RepositoryInfo, error) {
-	job := jobContext.Eng.Job("resolve_repository", reposName)
+	job := jobContext.Eng.Job("resolve_repository", reposName, jobContext.Name)
 	env, err := job.Stdout.AddEnv()
 	if err != nil {
 		return nil, err

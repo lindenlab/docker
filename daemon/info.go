@@ -65,10 +65,18 @@ func (daemon *Daemon) CmdInfo(job *engine.Job) engine.Status {
 	if err := registryEnv.GetJson("config", &registryConfig); err != nil {
 		return job.Error(err)
 	}
+	fullyQualifiedCommands := make([]string, 0)
+	for key, value := range registryConfig.JobPolicies {
+		if value.ForceQualified {
+			fullyQualifiedCommands = append(fullyQualifiedCommands, key)
+		}
+	}
+
 	v := &engine.Env{}
 	v.SetJson("ID", daemon.ID)
 	v.SetInt("Containers", len(daemon.List()))
 	v.SetInt("Images", imgcount)
+	v.SetList("FullyQualifiedCommands", fullyQualifiedCommands)
 	v.Set("Driver", daemon.GraphDriver().String())
 	v.SetJson("DriverStatus", daemon.GraphDriver().Status())
 	v.SetBool("MemoryLimit", daemon.SystemConfig().MemoryLimit)
@@ -84,6 +92,7 @@ func (daemon *Daemon) CmdInfo(job *engine.Job) engine.Status {
 	v.Set("OperatingSystem", operatingSystem)
 	v.Set("IndexServerAddress", registry.IndexServerAddress())
 	v.SetJson("RegistryConfig", registryConfig)
+	v.Set("IndexServerName", registry.IndexServerName())
 	v.Set("InitSha1", dockerversion.INITSHA1)
 	v.Set("InitPath", initPath)
 	v.SetInt("NCPU", runtime.NumCPU())
