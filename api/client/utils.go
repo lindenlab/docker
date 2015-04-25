@@ -276,6 +276,34 @@ func getExecExitCode(cli *DockerCli, execID string) (bool, int, error) {
 	return result.GetBool("Running"), result.GetInt("ExitCode"), nil
 }
 
+// QueryFQNCommands performs an /info request to inspect daemon 
+// job policy settings.
+func (cli *DockerCli) QueryFQNCommands() (map[string]bool, error) {
+	body, _, err := readBody(cli.call("GET", "/info", nil, nil))
+	if err != nil {
+		return nil, err
+	}
+
+	out := engine.NewOutput()
+	remoteInfo, err := out.AddEnv()
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := out.Write(body); err != nil {
+		log.Errorf("Error reading remote info: %s", err)
+		return nil, err
+	}
+	out.Close()
+
+	fqnCommands := make(map[string]bool)
+	for _, cmd := range remoteInfo.GetList("FullyQualifiedCommands") {
+		fqnCommands[cmd] = true
+	}
+
+	return fqnCommands, nil
+}
+
 func (cli *DockerCli) monitorTtySize(id string, isExec bool) error {
 	cli.resizeTty(id, isExec)
 

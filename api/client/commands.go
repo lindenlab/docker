@@ -348,7 +348,7 @@ func (cli *DockerCli) CmdBuild(args ...string) error {
 
 // 'docker login': login / register a user to registry service.
 func (cli *DockerCli) CmdLogin(args ...string) error {
-	cmd := cli.Subcmd("login", "[SERVER]", "Register or log in to a Docker registry server, if no server is\nspecified \""+registry.IndexServerAddress()+"\" is the default.", true)
+	cmd := cli.Subcmd("login", "[SERVER]", "Register or log in to a Docker registry server, if no server is\nspecified \""+registry.IndexServerName()+"\" is the default.", true)
 	cmd.Require(flag.Max, 1)
 
 	var username, password, email string
@@ -359,9 +359,22 @@ func (cli *DockerCli) CmdLogin(args ...string) error {
 
 	utils.ParseFlags(cmd, args, true)
 
+	fqnCommands, err := cli.QueryFQNCommands()
+	if err != nil {
+		fmt.Fprintln(cli.out, err.Error())
+		os.Exit(1)
+	}
+	// Disallow login with no serverAddress if daemon requires this.
+	if fqnCommands["login"] && len(cmd.Args()) == 0 {
+		fmt.Fprintf(cli.out, "Error: Missing registry name, try \"%s\" instead\n", registry.IndexServerName())
+		os.Exit(1)
+	}
 	serverAddress := registry.IndexServerAddress()
 	if len(cmd.Args()) > 0 {
 		serverAddress = cmd.Arg(0)
+		if serverAddress == registry.IndexServerName() {
+			serverAddress = registry.IndexServerAddress()
+		}
 	}
 
 	promptDefault := func(prompt string, configDefault string) {
@@ -369,6 +382,14 @@ func (cli *DockerCli) CmdLogin(args ...string) error {
 			fmt.Fprintf(cli.out, "%s: ", prompt)
 		} else {
 			fmt.Fprintf(cli.out, "%s (%s): ", prompt, configDefault)
+		}
+	}
+
+	firstPrompt := true
+	promptServerOnce := func() {
+		if firstPrompt {
+			fmt.Fprintf(cli.out, "Server: %s\n", serverAddress)
+			firstPrompt = false
 		}
 	}
 
@@ -389,6 +410,7 @@ func (cli *DockerCli) CmdLogin(args ...string) error {
 	}
 
 	if username == "" {
+		promptServerOnce()
 		promptDefault("Username", authconfig.Username)
 		username = readInput(cli.in, cli.out)
 		username = strings.Trim(username, " ")
@@ -404,6 +426,7 @@ func (cli *DockerCli) CmdLogin(args ...string) error {
 			if err != nil {
 				return err
 			}
+			promptServerOnce()
 			fmt.Fprintf(cli.out, "Password: ")
 			term.DisableEcho(cli.inFd, oldState)
 
@@ -417,6 +440,7 @@ func (cli *DockerCli) CmdLogin(args ...string) error {
 		}
 
 		if email == "" {
+			promptServerOnce()
 			promptDefault("Email", authconfig.Email)
 			email = readInput(cli.in, cli.out)
 			if email == "" {
@@ -467,13 +491,16 @@ func (cli *DockerCli) CmdLogin(args ...string) error {
 
 // log out from a Docker registry
 func (cli *DockerCli) CmdLogout(args ...string) error {
-	cmd := cli.Subcmd("logout", "[SERVER]", "Log out from a Docker registry, if no server is\nspecified \""+registry.IndexServerAddress()+"\" is the default.", true)
+	cmd := cli.Subcmd("logout", "[SERVER]", "Log out from a Docker registry, if no server is\nspecified \""+registry.IndexServerName()+"\" is the default.", true)
 	cmd.Require(flag.Max, 1)
 
 	utils.ParseFlags(cmd, args, false)
 	serverAddress := registry.IndexServerAddress()
 	if len(cmd.Args()) > 0 {
 		serverAddress = cmd.Arg(0)
+		if serverAddress == registry.IndexServerName() {
+			serverAddress = registry.IndexServerAddress()
+		}
 	}
 
 	cli.LoadConfigFile()
@@ -656,6 +683,10 @@ func (cli *DockerCli) CmdInfo(args ...string) error {
 	}
 	if remoteInfo.Exists("NoProxy") {
 		fmt.Fprintf(cli.out, "No Proxy: %s\n", remoteInfo.Get("NoProxy"))
+	}
+
+	if len(remoteInfo.GetList("FullyQualifiedCommands")) != 0 {
+		fmt.Fprintf(cli.out, "Fully Qualified Commands: %v\n", remoteInfo.GetList("FullyQualifiedCommands"))
 	}
 	if len(remoteInfo.GetList("IndexServerAddress")) != 0 {
 		cli.LoadConfigFile()
@@ -1311,7 +1342,7 @@ func (cli *DockerCli) CmdPush(args ...string) error {
 		if username == "" {
 			username = "<user>"
 		}
-		return fmt.Errorf("You cannot push a \"root\" repository. Please rename your repository to <user>/<repo> (ex: %s/%s)", username, repoInfo.LocalName)
+		return fmt.Errorf("You cannot push a \"root\" repository. Please rename your repository to <index>/<user>/<repo> (ex: %s/%s/%s)", repoInfo.Index.Name, username, repoInfo.LocalName)
 	}
 
 	v := url.Values{}
