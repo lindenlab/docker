@@ -717,7 +717,9 @@ func (container *Container) buildCreateEndpointOptions() ([]libnetwork.EndpointO
 		binding := bindings[port]
 		for i := 0; i < len(binding); i++ {
 			pbCopy := pb.GetCopy()
-			pbCopy.HostPort = uint16(nat.Port(binding[i].HostPort).Int())
+			ps, pe := nat.Port(binding[i].HostPort).Range()
+			pbCopy.HostPort = uint16(ps)
+			pbCopy.HostPortEnd = uint16(pe)
 			pbCopy.HostIP = net.ParseIP(binding[i].HostIp)
 			pbList = append(pbList, pbCopy)
 		}
