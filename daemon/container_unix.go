@@ -744,7 +744,9 @@ func (container *Container) buildCreateEndpointOptions() ([]libnetwork.EndpointO
 			if err != nil {
 				return nil, fmt.Errorf("Error parsing HostPort value(%s):%v", binding[i].HostPort, err)
 			}
-			pbCopy.HostPort = uint16(newP.Int())
+			portStart, portEnd := newP.Range()
+			pbCopy.HostPort = uint16(portStart)
+			pbCopy.HostPortEnd = uint16(portEnd)
 			pbCopy.HostIP = net.ParseIP(binding[i].HostIP)
 			pbList = append(pbList, pbCopy)
 		}
