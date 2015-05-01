@@ -41,6 +41,56 @@ func TestParsePort(t *testing.T) {
 	}
 }
 
+func TestParsePortRange(t *testing.T) {
+	var (
+		begin int
+		end   int
+		err   error
+	)
+
+	type TestRange struct {
+		Range string
+		Begin int
+		End   int
+	}
+	valid_ranges := []TestRange{
+		{"1234", 1234, 1234},
+		{"1234-1234", 1234, 1234},
+		{"1234-1235", 1234, 1235},
+		{"8000-9000", 8000, 9000},
+		{"0", 0, 0},
+		{"0-0", 0, 0},
+	}
+
+	for _, r := range valid_ranges {
+		begin, end, err = ParsePortRange(r.Range)
+
+		if err != nil || begin != r.Begin {
+			t.Fatalf("Parsing port range '%s' did not succeed. Expected begin %d, got %d", r.Range, r.Begin, begin)
+		}
+		if err != nil || end != r.End {
+			t.Fatalf("Parsing port range '%s' did not succeed. Expected end %d, got %d", r.Range, r.End, end)
+		}
+	}
+
+	invalid_ranges := []string{
+		"asdf",
+		"1asdf",
+		"9000-8000",
+		"9000-",
+		"-8000",
+		"-8000-",
+	}
+
+	for _, r := range invalid_ranges {
+		begin, end, err = ParsePortRange(r)
+
+		if err == nil || begin != 0 || end != 0 {
+			t.Fatalf("Parsing port range '%s' succeeded", r)
+		}
+	}
+}
+
 func TestPort(t *testing.T) {
 	p := NewPort("tcp", "1234")
 
