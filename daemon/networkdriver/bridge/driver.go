@@ -645,7 +645,7 @@ func AllocatePort(job *engine.Job) engine.Status {
 		ip            = defaultBindingIP
 		id            = job.Args[0]
 		hostIP        = job.Getenv("HostIP")
-		hostPort      = job.GetenvInt("HostPort")
+		hostPort      = job.Getenv("HostPort")
 		containerPort = job.GetenvInt("ContainerPort")
 		proto         = job.Getenv("Proto")
 		network       = currentInterfaces.Get(id)
@@ -693,16 +693,19 @@ func AllocatePort(job *engine.Job) engine.Status {
 	// In the event of failure to bind, return the error that portmapper.Map
 	// yields.
 	//
-
 	var host net.Addr
+	hostPortStart, hostPortEnd, err := nat.ParsePortRange(hostPort)
+	if err != nil {
+		return job.Error(err)
+	}
 	for i := 0; i < MaxAllocatedPortAttempts; i++ {
-		if host, err = portMapper.Map(container, ip, hostPort); err == nil {
+		if host, err = portMapper.Map(container, ip, hostPortStart, hostPortEnd); err == nil {
 			break
 		}
 		// There is no point in immediately retrying to map an explicitly
 		// chosen port.
-		if hostPort != 0 {
-			job.Logf("Failed to allocate and map port %d: %s", hostPort, err)
+		if hostPortStart != 0 {
+			job.Logf("Failed to allocate and map port %s: %s", hostPort, err)
 			break
 		}
 		job.Logf("Failed to allocate and map port: %s, retry: %d", err, i+1)
