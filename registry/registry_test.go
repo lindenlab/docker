@@ -223,14 +223,14 @@ func TestGetRemoteImageLayer(t *testing.T) {
 
 func TestGetRemoteTags(t *testing.T) {
 	r := spawnTestRegistrySession(t)
-	tags, err := r.GetRemoteTags([]string{makeURL("/v1/")}, REPO, token)
+	tags, err := r.GetRemoteTags([]string{makeURL("/v1/")}, REPO, token, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	assertEqual(t, len(tags), 1, "Expected one tag")
 	assertEqual(t, tags["latest"], imageID, "Expected tag latest to map to "+imageID)
 
-	_, err = r.GetRemoteTags([]string{makeURL("/v1/")}, "foo42/baz", token)
+	_, err = r.GetRemoteTags([]string{makeURL("/v1/")}, "foo42/baz", token, "")
 	if err == nil {
 		t.Fatal("Expected error when fetching tags for bogus repo")
 	}
