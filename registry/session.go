@@ -200,14 +200,21 @@ func (r *Session) GetRemoteImageLayer(imgID, registry string, token []string, im
 	return res.Body, nil
 }
 
-func (r *Session) GetRemoteTags(registries []string, repository string, token []string) (map[string]string, error) {
+func (r *Session) GetRemoteTags(registries []string, repository string, token []string, askedTag string) (map[string]string, error) {
 	if strings.Count(repository, "/") == 0 {
 		// This will be removed once the Registry supports auto-resolution on
 		// the "library" namespace
 		repository = "library/" + repository
 	}
 	for _, host := range registries {
-		endpoint := fmt.Sprintf("%srepositories/%s/tags", host, repository)
+		var endpoint string
+		if askedTag == "" {
+			// If no tag has been specified, request them all.
+			endpoint = fmt.Sprintf("%srepositories/%s/tags", host, repository)
+		} else {
+			// Otherwise only request the specified tag.
+			endpoint = fmt.Sprintf("%srepositories/%s/tags/%s", host, repository, askedTag)
+		}
 		req, err := r.reqFactory.NewRequest("GET", endpoint, nil)
 
 		if err != nil {
@@ -229,8 +236,19 @@ func (r *Session) GetRemoteTags(registries []string, repository string, token []
 		}
 
 		result := make(map[string]string)
-		if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
-			return nil, err
+		if askedTag == "" {
+			// If we requested all tags, they are already in map form.
+			if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
+				return nil, err
+			}
+		} else {
+			// Otherwise a single tag string will be returned.
+			// Create a single-entry map from that.
+			var tagId string
+			if err := json.NewDecoder(res.Body).Decode(&tagId); err != nil {
+				return nil, err
+			}
+			result[askedTag] = tagId
 		}
 		return result, nil
 	}

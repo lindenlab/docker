@@ -120,8 +120,11 @@ func (s *TagStore) pullRepository(r *registry.Session, out io.Writer, repoInfo *
 	}
 
 	log.Debugf("Retrieving the tag list")
-	tagsList, err := r.GetRemoteTags(repoData.Endpoints, repoInfo.RemoteName, repoData.Tokens)
+	tagsList, err := r.GetRemoteTags(repoData.Endpoints, repoInfo.RemoteName, repoData.Tokens, askedTag)
 	if err != nil {
+		if strings.Contains(err.Error(), "not found") && askedTag != "" {
+			return fmt.Errorf("Tag %s not found in repository %s", askedTag, repoInfo.CanonicalName)
+		}
 		log.Errorf("unable to get remote tags: %s", err)
 		return err
 	}
