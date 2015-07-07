@@ -290,7 +290,7 @@ func getExecExitCode(cli *DockerCli, execID string) (bool, int, error) {
 // QueryFQNCommands performs an /info request to inspect daemon 
 // job policy settings.
 func (cli *DockerCli) QueryFQNCommands() (map[string]bool, error) {
-	rdr, _, _, err := cli.call("GET", "/info", nil, nil)
+	rdr, _, err := cli.call("GET", "/info", nil, nil)
 	if err != nil {
 		return nil, err
 	}
