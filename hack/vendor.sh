@@ -14,6 +14,9 @@ clone() {
 
 	pkg_url=https://$pkg
 	target_dir=src/$pkg
+	if [ $# -gt 3 ]; then
+		target_dir=src/$4
+	fi
 
 	echo -n "$pkg @ $rev: "
 
@@ -55,7 +58,8 @@ clone hg code.google.com/p/go.net 84a4013f96e0
 clone hg code.google.com/p/gosqlite 74691fb6f837
 
 #get libnetwork packages
-clone git github.com/docker/libnetwork 3daf67270570c1e07e3e3184d46a10f0c5d66f87
+#clone git github.com/docker/libnetwork 3daf67270570c1e07e3e3184d46a10f0c5d66f87
+clone git github.com/lindenlab/libnetwork 30e21ef17cd9fab16ceba40f62ad780a9680bad6 github.com/docker/libnetwork
 clone git github.com/vishvananda/netns 493029407eeb434d0c2d44e02ea072ff2488d322
 clone git github.com/vishvananda/netlink 20397a138846e4d6590e01783ed023ed7e1c38a6
 
