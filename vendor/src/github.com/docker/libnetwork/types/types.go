@@ -29,6 +29,7 @@ type PortBinding struct {
 	Port     uint16
 	HostIP   net.IP
 	HostPort uint16
+	HostPortEnd uint16
 }
 
 // HostAddr returns the host side transport address
@@ -58,11 +59,12 @@ func (p PortBinding) ContainerAddr() (net.Addr, error) {
 // GetCopy returns a copy of this PortBinding structure instance
 func (p *PortBinding) GetCopy() PortBinding {
 	return PortBinding{
-		Proto:    p.Proto,
-		IP:       GetIPCopy(p.IP),
-		Port:     p.Port,
-		HostIP:   GetIPCopy(p.HostIP),
-		HostPort: p.HostPort,
+		Proto:       p.Proto,
+		IP:          GetIPCopy(p.IP),
+		Port:        p.Port,
+		HostIP:      GetIPCopy(p.HostIP),
+		HostPort:    p.HostPort,
+		HostPortEnd: p.HostPortEnd,
 	}
 }
 
@@ -76,7 +78,8 @@ func (p *PortBinding) Equal(o *PortBinding) bool {
 		return false
 	}
 
-	if p.Proto != o.Proto || p.Port != o.Port || p.HostPort != o.HostPort {
+	if p.Proto != o.Proto || p.Port != o.Port ||
+		p.HostPort != o.HostPort || p.HostPortEnd != o.HostPortEnd {
 		return false
 	}
 
