@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/net/websocket"
+	"code.google.com/p/go.net/websocket"
 	"github.com/gorilla/mux"
 
 	"github.com/Sirupsen/logrus"
