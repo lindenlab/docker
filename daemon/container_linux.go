@@ -700,9 +700,14 @@ func (container *Container) buildCreateEndpointOptions() ([]libnetwork.EndpointO
 
 	container.NetworkSettings.PortMapping = nil
 
-	//ports := make([]nat.Port, len(portSpecs))
-	var ports []nat.Port
+	ports := make([]nat.Port, len(portSpecs))
+	knownPorts := make(map[nat.Port]struct{}, len(portSpecs))
 	currentPortSpec := 0
+	for p := range portSpecs {
+		ports[currentPortSpec] = p
+		currentPortSpec++
+		knownPorts[p] = struct{}{}
+	}
 
 	// Workaround for ECS not supporting port ranges in port specs.
 	// Look for the Environment variable "PORT_SPECS" and treat it
@@ -711,26 +716,20 @@ func (container *Container) buildCreateEndpointOptions() ([]libnetwork.EndpointO
 		envParts := strings.SplitN(envVar, "=", 2)
 		if envParts[0] == "PORT_SPECS" {
 			envPortSpecs := strings.Split(envParts[1], " ")
-			envPorts, envPortBindings, err := nat.ParsePortSpecs(envPortSpecs)
+			_, envPortBindings, err := nat.ParsePortSpecs(envPortSpecs)
 			if err != nil {
 				return nil, err
 			}
-			ports = make([]nat.Port, len(portSpecs) + len(envPorts))
 			for envPort, envPortBinding := range envPortBindings {
 				bindings[envPort] = envPortBinding
-				ports[currentPortSpec] = envPort
-				currentPortSpec++
+				if _, exists := knownPorts[envPort]; !exists {
+					ports = append(ports, envPort)
+					knownPorts[envPort] = struct{}{}
+				}
 			}
 		}
 	}
-	if ports == nil {
-		ports = make([]nat.Port, len(portSpecs))
-	}
 
-	for p := range portSpecs {
-		ports[currentPortSpec] = p
-		currentPortSpec++
-	}
 	nat.SortPortMap(ports, bindings)
 	for _, port := range ports {
 		expose := types.TransportPort{}
