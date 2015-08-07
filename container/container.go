@@ -870,11 +870,35 @@ func (container *Container) BuildCreateEndpointOptions(n libnetwork.Network, epC
 
 	portSpecs := container.Config.ExposedPorts
 	ports := make([]nat.Port, len(portSpecs))
-	var i int
+	knownPorts := make(map[nat.Port]struct{}, len(portSpecs))
+	currentPortSpec := 0
 	for p := range portSpecs {
-		ports[i] = p
-		i++
+		ports[currentPortSpec] = p
+		currentPortSpec++
+		knownPorts[p] = struct{}{}
 	}
+
+	// Workaround for ECS not supporting port ranges in port specs.
+	// Look for the Environment variable "PORT_SPECS" and treat it
+	// as addition portSpec definitions.
+	for _, envVar := range container.Config.Env {
+		envParts := strings.SplitN(envVar, "=", 2)
+		if envParts[0] == "PORT_SPECS" {
+			envPortSpecs := strings.Split(envParts[1], " ")
+			_, envPortBindings, err := nat.ParsePortSpecs(envPortSpecs)
+			if err != nil {
+				return nil, err
+			}
+			for envPort, envPortBinding := range envPortBindings {
+				bindings[envPort] = envPortBinding
+				if _, exists := knownPorts[envPort]; !exists {
+					ports = append(ports, envPort)
+					knownPorts[envPort] = struct{}{}
+				}
+			}
+		}
+	}
+
 	nat.SortPortMap(ports, bindings)
 	for _, port := range ports {
 		expose := types.TransportPort{}
