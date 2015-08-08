@@ -44,6 +44,23 @@ func (d Docker) LookupImage(name string) (*image.Image, error) {
 
 // Pull tells Docker to pull image referenced by `name`.
 func (d Docker) Pull(name string) (*image.Image, error) {
+	nameParts := strings.SplitN(name, "/", 2)
+	var isFullyQualified bool
+	if len(nameParts) == 1 || (!strings.Contains(nameParts[0], ".") &&
+		!strings.Contains(nameParts[0], ":") && nameParts[0] != "localhost") {
+		isFullyQualified = false
+	} else {
+		isFullyQualified = true
+	}
+	jobPolicy, err := d.Daemon.RegistryService.Config.GetJobPolicy("pull")
+	if err != nil {
+		return nil, err
+	}
+
+	if jobPolicy.ForceQualified && !isFullyQualified {
+		return nil, fmt.Errorf("Missing registry name, try \"%s/%s\" instead", registry.IndexName, name)
+	}
+
 	remote, tag := parsers.ParseRepositoryTag(name)
 	if tag == "" {
 		tag = "latest"

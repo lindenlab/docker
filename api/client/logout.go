@@ -14,14 +14,26 @@ import (
 //
 // Usage: docker logout [SERVER]
 func (cli *DockerCli) CmdLogout(args ...string) error {
-	cmd := Cli.Subcmd("logout", []string{"[SERVER]"}, Cli.DockerCommands["logout"].Description+".\nIf no server is specified \""+registry.IndexServer+"\" is the default.", true)
+	cmd := Cli.Subcmd("logout", []string{"[SERVER]"}, Cli.DockerCommands["logout"].Description+".\nIf no server is specified \""+registry.IndexName+"\" is the default.", true)
 	cmd.Require(flag.Max, 1)
 
 	cmd.ParseFlags(args, true)
 
+	fqnCommands, err := cli.QueryFQNCommands()
+	if err != nil {
+		return err
+	}
+	// Disallow logout with no serverAddress if daemon requires this.
+	if fqnCommands["login"] && len(cmd.Args()) == 0 {
+		return fmt.Errorf("Missing registry name, try \"%s\" instead\n", registry.IndexName)
+	}
+
 	serverAddress := registry.IndexServer
 	if len(cmd.Args()) > 0 {
 		serverAddress = cmd.Arg(0)
+		if serverAddress == registry.IndexName {
+			serverAddress = registry.IndexServer
+		}
 	}
 
 	if _, ok := cli.configFile.AuthConfigs[serverAddress]; !ok {

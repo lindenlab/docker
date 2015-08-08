@@ -20,7 +20,11 @@ func (cli *DockerCli) CmdPush(args ...string) error {
 
 	cmd.ParseFlags(args, true)
 
-	remote, tag := parsers.ParseRepositoryTag(cmd.Arg(0))
+	name := cmd.Arg(0)
+	if err := cli.CheckFullyQualified(name, "push"); err != nil {
+		return err
+	}
+	remote, tag := parsers.ParseRepositoryTag(name)
 
 	// Resolve the Repository name from fqn to RepositoryInfo
 	repoInfo, err := registry.ParseRepositoryInfo(remote)

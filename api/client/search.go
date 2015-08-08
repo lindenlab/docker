@@ -39,6 +39,9 @@ func (cli *DockerCli) CmdSearch(args ...string) error {
 	v := url.Values{}
 	v.Set("term", name)
 
+	if err := cli.CheckFullyQualified(name, "search"); err != nil {
+		return err
+	}
 	// Resolve the Repository name from fqn to hostname + name
 	taglessRemote, _ := parsers.ParseRepositoryTag(name)
 

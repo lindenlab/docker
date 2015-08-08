@@ -326,6 +326,57 @@ func getExecExitCode(cli *DockerCli, execID string) (bool, int, error) {
 	return c.Running, c.ExitCode, nil
 }
 
+// QueryFQNCommands performs an /info request to inspect daemon
+// job policy settings.
+func (cli *DockerCli) QueryFQNCommands() (map[string]bool, error) {
+	serverResp, err := cli.call("GET", "/info", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	defer serverResp.body.Close()
+
+	info := &types.Info{}
+	if err := json.NewDecoder(serverResp.body).Decode(info); err != nil {
+		return nil, fmt.Errorf("Error reading remote info: %v", err)
+	}
+
+	fqnCommands := make(map[string]bool)
+	for _, cmd := range info.FullyQualifiedCommands {
+		fqnCommands[cmd] = true
+	}
+
+	return fqnCommands, nil
+}
+
+// CheckFullyQualified performs an /info request and checks
+// fully qualified settings.
+func (cli *DockerCli) CheckFullyQualified(name, context string) error {
+	nameParts := strings.SplitN(name, "/", 2)
+	var isFullyQualified bool
+	if len(nameParts) == 1 || (!strings.Contains(nameParts[0], ".") &&
+		!strings.Contains(nameParts[0], ":") && nameParts[0] != "localhost") {
+		isFullyQualified = false
+	} else {
+		isFullyQualified = true
+	}
+
+	fqnCommands, err := cli.QueryFQNCommands()
+	if err != nil {
+		return err
+	}
+
+	fqn, ok := fqnCommands[context]
+	if !ok {
+		return fmt.Errorf("Command '%s' has no policy!", context)
+	}
+
+	if fqn && !isFullyQualified {
+		return fmt.Errorf("Missing registry name, try \"%s/%s\" instead", registry.IndexName, name)
+	}
+	return nil
+}
+
 func (cli *DockerCli) monitorTtySize(id string, isExec bool) error {
 	cli.resizeTty(id, isExec)
 

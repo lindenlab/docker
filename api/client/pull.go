@@ -23,6 +23,9 @@ func (cli *DockerCli) CmdPull(args ...string) error {
 	cmd.ParseFlags(args, true)
 	remote := cmd.Arg(0)
 
+	if err := cli.CheckFullyQualified(remote, "pull"); err != nil {
+		return err
+	}
 	taglessRemote, tag := parsers.ParseRepositoryTag(remote)
 	if tag == "" && !*allTags {
 		tag = tags.DefaultTag
