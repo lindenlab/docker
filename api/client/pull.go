@@ -29,6 +29,10 @@ func (cli *DockerCli) CmdPull(args ...string) error {
 	if err != nil {
 		return err
 	}
+	if err := cli.CheckFullyQualified(remote, "pull"); err != nil {
+		return err
+	}
+
 	if *allTags && !reference.IsNameOnly(distributionRef) {
 		return errors.New("tag can't be used with --all-tags/-a")
 	}

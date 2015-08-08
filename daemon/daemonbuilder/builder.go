@@ -42,6 +42,14 @@ func (d Docker) Pull(name string) (builder.Image, error) {
 		return nil, err
 	}
 	ref = reference.WithDefaultTag(ref)
+	jobPolicy, err := d.Daemon.RegistryService.Config.GetJobPolicy("pull")
+	if err != nil {
+		return nil, err
+	}
+
+	if jobPolicy.ForceQualified && !ref.FullyQualified() {
+		return nil, fmt.Errorf("Missing registry name, try \"%s/%s\" instead", ref.Hostname(), ref.Name())
+	}
 
 	pullRegistryAuth := &types.AuthConfig{}
 	if len(d.AuthConfigs) > 0 {

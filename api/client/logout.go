@@ -5,6 +5,7 @@ import (
 
 	Cli "github.com/docker/docker/cli"
 	flag "github.com/docker/docker/pkg/mflag"
+	"github.com/docker/docker/registry"
 )
 
 // CmdLogout logs a user out from a Docker registry.
@@ -17,6 +18,15 @@ func (cli *DockerCli) CmdLogout(args ...string) error {
 	cmd.Require(flag.Max, 1)
 
 	cmd.ParseFlags(args, true)
+
+	fqnCommands, err := cli.QueryFQNCommands()
+	if err != nil {
+		return err
+	}
+	// Disallow logout with no serverAddress if daemon requires this.
+	if fqnCommands["login"] && len(cmd.Args()) == 0 {
+		return fmt.Errorf("Missing registry name, try \"%s\" instead\n", registry.IndexName)
+	}
 
 	var serverAddress string
 	if len(cmd.Args()) > 0 {

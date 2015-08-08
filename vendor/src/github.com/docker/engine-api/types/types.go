@@ -237,6 +237,8 @@ type Info struct {
 	ServerVersion      string
 	ClusterStore       string
 	ClusterAdvertise   string
+	FullyQualifiedCommands []string
+	IndexServerName        string
 }
 
 // PluginsInfo is temp struct holds Plugins name

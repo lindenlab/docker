@@ -13,6 +13,7 @@ import (
 	"github.com/docker/docker/pkg/term"
 	"github.com/docker/engine-api/client"
 	"github.com/docker/engine-api/types"
+	"github.com/docker/docker/registry"
 )
 
 // CmdLogin logs in or registers a user to a Docker registry service.
@@ -33,6 +34,15 @@ func (cli *DockerCli) CmdLogin(args ...string) error {
 	// On Windows, force the use of the regular OS stdin stream. Fixes #14336/#14210
 	if runtime.GOOS == "windows" {
 		cli.in = os.Stdin
+	}
+
+	fqnCommands, err := cli.QueryFQNCommands()
+	if err != nil {
+		return err
+	}
+	// Disallow login with no serverAddress if daemon requires this.
+	if fqnCommands["login"] && len(cmd.Args()) == 0 {
+		return fmt.Errorf("Missing registry name, try \"%s\" instead\n", registry.IndexName)
 	}
 
 	var serverAddress string
@@ -83,7 +93,16 @@ func (cli *DockerCli) configureAuth(flUser, flPassword, flEmail, serverAddress s
 		authconfig = types.AuthConfig{}
 	}
 
+	firstPrompt := true
+	promptServerOnce := func() {
+		if firstPrompt {
+			fmt.Fprintf(cli.out, "Server: %s\n", serverAddress)
+			firstPrompt = false
+		}
+	}
+
 	if flUser == "" {
+		promptServerOnce()
 		cli.promptWithDefault("Username", authconfig.Username)
 		flUser = readInput(cli.in, cli.out)
 		flUser = strings.TrimSpace(flUser)
@@ -113,6 +132,7 @@ func (cli *DockerCli) configureAuth(flUser, flPassword, flEmail, serverAddress s
 	// the email from the config file, so prompt it
 	if flUser != authconfig.Username {
 		if flEmail == "" {
+			promptServerOnce()
 			cli.promptWithDefault("Email", authconfig.Email)
 			flEmail = readInput(cli.in, cli.out)
 			if flEmail == "" {
