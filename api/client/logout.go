@@ -14,7 +14,7 @@ import (
 //
 // Usage: docker logout [SERVER]
 func (cli *DockerCli) CmdLogout(args ...string) error {
-	cmd := Cli.Subcmd("logout", []string{"[SERVER]"}, "Log out from a Docker registry, if no server is\nspecified \""+registry.IndexServer+"\" is the default.", true)
+    cmd := Cli.Subcmd("logout", []string{"[SERVER]"}, "Log out from a Docker registry, if no server is\nspecified \""+registry.IndexName+"\" is the default.", true)
 	cmd.Require(flag.Max, 1)
 
 	cmd.ParseFlags(args, true)
@@ -22,6 +22,9 @@ func (cli *DockerCli) CmdLogout(args ...string) error {
 	serverAddress := registry.IndexServer
 	if len(cmd.Args()) > 0 {
 		serverAddress = cmd.Arg(0)
+		if serverAddress == registry.IndexName {
+			serverAddress = registry.IndexServer
+		}
 	}
 
 	if _, ok := cli.configFile.AuthConfigs[serverAddress]; !ok {

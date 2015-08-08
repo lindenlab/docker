@@ -547,6 +547,51 @@ func TestParseRepositoryInfo(t *testing.T) {
 	}
 }
 
+func TestNewRepositoryInfo(t *testing.T) {
+	config := &ServiceConfig{
+		JobPolicies:           make(map[string]*JobPolicy),
+	}
+	config.JobPolicies["pull"] = &JobPolicy {
+		ForceQualified: true,
+	}
+	config.JobPolicies["search"] = &JobPolicy {
+		ForceQualified: false,
+	}
+	_, err := config.NewRepositoryInfo("ubuntu", "pull")
+	if err == nil {
+		t.Fatal("Expected error with unqualified repo name: ubuntu")
+	}
+	_, err = config.NewRepositoryInfo("library/ubuntu", "pull")
+	if err == nil {
+		t.Fatal("Expected error with unqualified repo name: library/ubuntu")
+	}
+	_, err = config.NewRepositoryInfo(IndexName+"/library/ubuntu", "pull")
+	if err != nil {
+		t.Fatal("Expected no error with qualified repo name: " + IndexName + "/library/ubuntu")
+	}
+	_, err = config.NewRepositoryInfo("127.0.0.1:5000/private/moonbase", "pull")
+	if err != nil {
+		t.Fatal("Expected no error with qualified repo name: 127.0.0.1:5000/private/moonbase")
+	}
+
+	_, err = config.NewRepositoryInfo("ubuntu", "search")
+	if err != nil {
+		t.Fatal("Expected no error with unqualified repo name: ubuntu")
+	}
+	_, err = config.NewRepositoryInfo("library/ubuntu", "search")
+	if err != nil {
+		t.Fatal("Expected no error with unqualified repo name: library/ubuntu")
+	}
+	_, err = config.NewRepositoryInfo(IndexName+"/library/ubuntu", "search")
+	if err != nil {
+		t.Fatal("Expected no error with qualified repo name: " + IndexName + "/library/ubuntu")
+	}
+	_, err = config.NewRepositoryInfo("127.0.0.1:5000/private/moonbase", "search")
+	if err != nil {
+		t.Fatal("Expected no error with qualified repo name: 127.0.0.1:5000/private/moonbase")
+	}
+}
+
 func TestNewIndexInfo(t *testing.T) {
 	testIndexInfo := func(config *ServiceConfig, expectedIndexInfos map[string]*IndexInfo) {
 		for indexName, expectedIndexInfo := range expectedIndexInfos {

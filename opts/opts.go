@@ -201,6 +201,78 @@ func NewMapOpts(values map[string]string, validator ValidatorFctType) *MapOpts {
 	}
 }
 
+// StringSetOpts type
+type StringSetOpts struct {
+	values    *map[string]bool
+	validator ValidatorFctListType
+}
+
+func NewStringSetOpts(validator ValidatorFctListType) StringSetOpts {
+	values := make(map[string]bool)
+	return *newStringSetOptsRef(&values, validator)
+}
+
+func newStringSetOptsRef(values *map[string]bool, validator ValidatorFctListType) *StringSetOpts {
+	return &StringSetOpts{
+		values:    values,
+		validator: validator,
+	}
+}
+
+func (opts *StringSetOpts) GetList() []string {
+	keys := make([]string, 0, len(*opts.values))
+	for k := range *opts.values {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+func (opts *StringSetOpts) String() string {
+	return fmt.Sprintf("%v", opts.GetList())
+}
+
+// Set validates if needed the input value and add it to the
+// internal map.
+func (opts *StringSetOpts) Set(value string) error {
+	values := strings.Split(value, ",")
+	if opts.validator != nil {
+		var validated []string
+		for _, in := range values {
+			v, err := opts.validator(in)
+			if err != nil {
+				return err
+			}
+			validated = append(validated, v...)
+		}
+		values = validated
+	}
+	for _, v := range values {
+		(*opts.values)[v] = true
+	}
+	return nil
+}
+
+// Delete remove the given element from the slice.
+func (opts *StringSetOpts) Delete(key string) {
+	delete((*opts.values), key)
+}
+
+func (opts *StringSetOpts) GetMap() map[string]bool {
+	return (*opts.values)
+}
+
+// Get checks the existence of the given key.
+func (opts *StringSetOpts) Get(key string) bool {
+	return (*opts.values)[key]
+}
+
+// Len returns the amount of element in the slice.
+func (opts *StringSetOpts) Len() int {
+	return len((*opts.values))
+}
+
+// Validators
+
 // ValidatorFctType validator that return a validate string and/or an error
 type ValidatorFctType func(val string) (string, error)
 
