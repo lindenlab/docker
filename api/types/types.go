@@ -191,49 +191,51 @@ type Version struct {
 // Info contains response of Remote API:
 // GET "/info"
 type Info struct {
-	ID                 string
-	Containers         int
-	Images             int
-	Driver             string
-	DriverStatus       [][2]string
-	Plugins            PluginsInfo
-	MemoryLimit        bool
-	SwapLimit          bool
-	CPUCfsPeriod       bool `json:"CpuCfsPeriod"`
-	CPUCfsQuota        bool `json:"CpuCfsQuota"`
-	CPUShares          bool
-	CPUSet             bool
-	IPv4Forwarding     bool
-	BridgeNfIptables   bool
-	BridgeNfIP6tables  bool `json:"BridgeNfIp6tables"`
-	Debug              bool
-	NFd                int
-	OomKillDisable     bool
-	NGoroutines        int
-	SystemTime         string
-	ExecutionDriver    string
-	LoggingDriver      string
-	NEventsListener    int
-	KernelVersion      string
-	OperatingSystem    string
-	OSType             string
-	Architecture       string
-	IndexServerAddress string
-	RegistryConfig     *registry.ServiceConfig
-	InitSha1           string
-	InitPath           string
-	NCPU               int
-	MemTotal           int64
-	DockerRootDir      string
-	HTTPProxy          string `json:"HttpProxy"`
-	HTTPSProxy         string `json:"HttpsProxy"`
-	NoProxy            string
-	Name               string
-	Labels             []string
-	ExperimentalBuild  bool
-	ServerVersion      string
-	ClusterStore       string
-	ClusterAdvertise   string
+	ID                     string
+	Containers             int
+	Images                 int
+	FullyQualifiedCommands []string
+	Driver                 string
+	DriverStatus           [][2]string
+	Plugins                PluginsInfo
+	MemoryLimit            bool
+	SwapLimit              bool
+	CPUCfsPeriod           bool `json:"CpuCfsPeriod"`
+	CPUCfsQuota            bool `json:"CpuCfsQuota"`
+	CPUShares              bool
+	CPUSet                 bool
+	IPv4Forwarding         bool
+	BridgeNfIptables       bool
+	BridgeNfIP6tables      bool `json:"BridgeNfIp6tables"`
+	Debug                  bool
+	NFd                    int
+	OomKillDisable         bool
+	NGoroutines            int
+	SystemTime             string
+	ExecutionDriver        string
+	LoggingDriver          string
+	NEventsListener        int
+	KernelVersion          string
+	OperatingSystem        string
+	OSType                 string
+	Architecture           string
+	IndexServerAddress     string
+	IndexServerName        string
+	RegistryConfig         *registry.ServiceConfig
+	InitSha1               string
+	InitPath               string
+	NCPU                   int
+	MemTotal               int64
+	DockerRootDir          string
+	HTTPProxy              string `json:"HttpProxy"`
+	HTTPSProxy             string `json:"HttpsProxy"`
+	NoProxy                string
+	Name                   string
+	Labels                 []string
+	ExperimentalBuild      bool
+	ServerVersion          string
+	ClusterStore           string
+	ClusterAdvertise       string
 }
 
 // PluginsInfo is temp struct holds Plugins name

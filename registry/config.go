@@ -17,6 +17,7 @@ import (
 type Options struct {
 	Mirrors            opts.ListOpts
 	InsecureRegistries opts.ListOpts
+	FullyQualifiedCmds opts.StringSetOpts
 }
 
 const (
@@ -49,6 +50,10 @@ var (
 	V2Only = false
 )
 
+var (
+	ValidFullyQualifiedCmds = []string{"pull", "push", "search", "login"}
+)
+
 // InstallFlags adds command-line options to the top-level flag parser for
 // the current process.
 func (options *Options) InstallFlags(cmd *flag.FlagSet, usageFn func(string) string) {
@@ -57,6 +62,27 @@ func (options *Options) InstallFlags(cmd *flag.FlagSet, usageFn func(string) str
 	options.InsecureRegistries = opts.NewListOpts(ValidateIndexName)
 	cmd.Var(&options.InsecureRegistries, []string{"-insecure-registry"}, usageFn("Enable insecure registry communication"))
 	cmd.BoolVar(&V2Only, []string{"-disable-legacy-registry"}, false, "Do not contact legacy registries")
+	options.FullyQualifiedCmds = opts.NewStringSetOpts(ValidateFullyQualifiedCmd)
+	cmd.Var(&options.FullyQualifiedCmds, []string{"-force-fully-qualified"}, usageFn(fmt.Sprintf("Force Docker commands to use fully qualified image names.  Valid commands: %s,all", strings.Join(ValidFullyQualifiedCmds, ","))))
+}
+
+// Validates a fully qualified command list
+func ValidateFullyQualifiedCmd(val string) ([]string, error) {
+	if val == "all" {
+		var cmds []string
+		for _, cmd := range ValidFullyQualifiedCmds {
+			if cmd != "all" {
+				cmds = append(cmds, cmd)
+			}
+		}
+		return cmds, nil
+	}
+	for _, str := range ValidFullyQualifiedCmds {
+		if val == str {
+			return []string{val}, nil
+		}
+	}
+	return []string{}, fmt.Errorf("%s is not a valid force-fully-qualified command", val)
 }
 
 // NewServiceConfig returns a new instance of ServiceConfig
@@ -65,6 +91,7 @@ func NewServiceConfig(options *Options) *registrytypes.ServiceConfig {
 		options = &Options{
 			Mirrors:            opts.NewListOpts(nil),
 			InsecureRegistries: opts.NewListOpts(nil),
+			FullyQualifiedCmds: opts.NewStringSetOpts(nil),
 		}
 	}
 
@@ -80,7 +107,8 @@ func NewServiceConfig(options *Options) *registrytypes.ServiceConfig {
 		IndexConfigs:          make(map[string]*registrytypes.IndexInfo, 0),
 		// Hack: Bypass setting the mirrors to IndexConfigs since they are going away
 		// and Mirrors are only for the official registry anyways.
-		Mirrors: options.Mirrors.GetAll(),
+		Mirrors:     options.Mirrors.GetAll(),
+		JobPolicies: make(map[string]*registrytypes.JobPolicy),
 	}
 	// Split --insecure-registry into CIDR and registry-specific settings.
 	for _, r := range options.InsecureRegistries.GetAll() {
@@ -98,6 +126,15 @@ func NewServiceConfig(options *Options) *registrytypes.ServiceConfig {
 				Official: false,
 			}
 		}
+	}
+	// Configure JobPolicies from FullyQualifiedCmds settings.
+	for _, k := range ValidFullyQualifiedCmds {
+		config.JobPolicies[k] = &registrytypes.JobPolicy{
+			ForceQualified: options.FullyQualifiedCmds.Get(k),
+		}
+	}
+	config.JobPolicies["parse"] = &registrytypes.JobPolicy{
+		ForceQualified: false,
 	}
 
 	// Configure public registry.

@@ -113,6 +113,10 @@ func (cli *DockerCli) createContainer(config *container.Config, hostConfig *cont
 		if lib.IsErrImageNotFound(err) {
 			fmt.Fprintf(cli.err, "Unable to find image '%s' locally\n", ref.String())
 
+			if err := cli.CheckFullyQualified(config.Image, "pull"); err != nil {
+				return nil, err
+			}
+
 			// we don't want to write to stdout anything apart from container.ID
 			if err = cli.pullImageCustomOut(config.Image, cli.err); err != nil {
 				return nil, err

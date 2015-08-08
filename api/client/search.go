@@ -31,6 +31,10 @@ func (cli *DockerCli) CmdSearch(args ...string) error {
 	v := url.Values{}
 	v.Set("term", name)
 
+	if err := cli.CheckFullyQualified(name, "search"); err != nil {
+		return err
+	}
+
 	indexInfo, err := registry.ParseSearchIndexInfo(name)
 	if err != nil {
 		return err

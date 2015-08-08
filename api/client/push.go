@@ -23,8 +23,12 @@ func (cli *DockerCli) CmdPush(args ...string) error {
 
 	cmd.ParseFlags(args, true)
 
-	ref, err := reference.ParseNamed(cmd.Arg(0))
+	name := cmd.Arg(0)
+	ref, err := reference.ParseNamed(name)
 	if err != nil {
+		return err
+	}
+	if err := cli.CheckFullyQualified(name, "push"); err != nil {
 		return err
 	}
 
