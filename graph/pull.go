@@ -51,7 +51,7 @@ func (s *TagStore) Pull(image string, tag string, imagePullConfig *ImagePullConf
 	var sf = streamformatter.NewJSONStreamFormatter()
 
 	// Resolve the Repository name from fqn to RepositoryInfo
-	repoInfo, err := s.registryService.ResolveRepository(image)
+	repoInfo, err := s.registryService.ResolveRepository(image, "pull")
 	if err != nil {
 		return err
 	}

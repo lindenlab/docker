@@ -38,7 +38,7 @@ func (cli *DockerCli) CmdPush(args ...string) error {
 		if username == "" {
 			username = "<user>"
 		}
-		return fmt.Errorf("You cannot push a \"root\" repository. Please rename your repository to <user>/<repo> (ex: %s/%s)", username, repoInfo.LocalName)
+		return fmt.Errorf("You cannot push a \"root\" repository. Please rename your repository to <index>/<user>/<repo> (ex: %s/%s/%s)", repoInfo.Index.Name, username, repoInfo.LocalName)
 	}
 
 	if isTrusted() {
