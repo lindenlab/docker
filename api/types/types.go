@@ -162,6 +162,7 @@ type Info struct {
 	ID                 string
 	Containers         int
 	Images             int
+	FullyQualifiedCommands []string
 	Driver             string
 	DriverStatus       [][2]string
 	MemoryLimit        bool
@@ -182,6 +183,7 @@ type Info struct {
 	KernelVersion      string
 	OperatingSystem    string
 	IndexServerAddress string
+	IndexServerName    string
 	RegistryConfig     interface{}
 	InitSha1           string
 	InitPath           string
