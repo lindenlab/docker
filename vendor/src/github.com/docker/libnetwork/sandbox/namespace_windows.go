@@ -21,8 +21,3 @@ func NewSandbox(key string, osCreate bool) (Sandbox, error) {
 // and waits for it.
 func GC() {
 }
-
-// InitOSContext initializes OS context while configuring network resources
-func InitOSContext() func() {
-	return func() {}
-}

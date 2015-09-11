@@ -26,8 +26,6 @@ var (
 	gpmWg            sync.WaitGroup
 	gpmCleanupPeriod = 60 * time.Second
 	gpmChan          = make(chan chan struct{})
-	nsOnce           sync.Once
-	initNs           netns.NsHandle
 )
 
 // The networkNamespace type is the linux implementation of the Sandbox
@@ -50,7 +48,7 @@ func init() {
 
 func createBasePath() {
 	err := os.MkdirAll(prefix, 0644)
-	if err != nil && !os.IsExist(err) {
+	if err != nil {
 		panic("Could not create net namespace path directory")
 	}
 
@@ -244,37 +242,15 @@ func (n *networkNamespace) InvokeFunc(f func()) error {
 	})
 }
 
-func getLink() (string, error) {
-	return os.Readlink(fmt.Sprintf("/proc/%d/task/%d/ns/net", os.Getpid(), syscall.Gettid()))
-}
-
-func nsInit() {
-	var err error
-
-	if initNs, err = netns.Get(); err != nil {
-		log.Errorf("could not get initial namespace: %v", err)
-	}
-}
-
-// InitOSContext initializes OS context while configuring network resources
-func InitOSContext() func() {
-	runtime.LockOSThread()
-	nsOnce.Do(nsInit)
-	if err := netns.Set(initNs); err != nil {
-		linkInfo, linkErr := getLink()
-		if linkErr != nil {
-			linkInfo = linkErr.Error()
-		}
-
-		log.Errorf("failed to set to initial namespace, %v, initns fd %d: %v",
-			linkInfo, initNs, err)
-	}
-
-	return runtime.UnlockOSThread
-}
-
 func nsInvoke(path string, prefunc func(nsFD int) error, postfunc func(callerFD int) error) error {
-	defer InitOSContext()()
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	origns, err := netns.Get()
+	if err != nil {
+		return err
+	}
+	defer origns.Close()
 
 	f, err := os.OpenFile(path, os.O_RDONLY, 0)
 	if err != nil {
@@ -293,10 +269,10 @@ func nsInvoke(path string, prefunc func(nsFD int) error, postfunc func(callerFD 
 	if err = netns.Set(netns.NsHandle(nsFD)); err != nil {
 		return err
 	}
-	defer netns.Set(initNs)
+	defer netns.Set(origns)
 
 	// Invoked after the namespace switch.
-	return postfunc(int(initNs))
+	return postfunc(int(origns))
 }
 
 func (n *networkNamespace) nsPath() string {
