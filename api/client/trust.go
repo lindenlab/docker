@@ -36,11 +36,10 @@ import (
 var untrusted bool
 
 func addTrustedFlags(fs *flag.FlagSet, verify bool) {
-	var trusted bool
+	trusted := true
 	if e := os.Getenv("DOCKER_CONTENT_TRUST"); e != "" {
-		if t, err := strconv.ParseBool(e); t || err != nil {
-			// treat any other value as true
-			trusted = true
+		if t, err := strconv.ParseBool(e); err == nil && !t {
+			trusted = false
 		}
 	}
 	message := "Skip image signing"
@@ -90,6 +89,13 @@ func trustServer(index *registry.IndexInfo) (string, error) {
 	if index.Official {
 		return registry.NotaryServer, nil
 	}
+
+	// Ping the registry to attempt trust resolution
+    endpoint, err := registry.NewEndpoint(index, nil, registry.APIVersion2)
+	if err == nil && endpoint.TrustServer != "" {
+		return endpoint.TrustServer, nil
+	}
+
 	return "https://" + index.Name, nil
 }
 
