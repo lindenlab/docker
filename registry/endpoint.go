@@ -122,6 +122,7 @@ type Endpoint struct {
 	Version        APIVersion
 	IsSecure       bool
 	AuthChallenges []*AuthorizationChallenge
+	TrustServer    string
 	URLBuilder     *v2.URLBuilder
 }
 
@@ -240,6 +241,8 @@ func (e *Endpoint) pingV2() (PingResult, error) {
 		return PingResult{}, err
 	}
 	defer resp.Body.Close()
+
+	e.TrustServer = resp.Header.Get("X-Docker-Trust-Server")
 
 	// The endpoint may have multiple supported versions.
 	// Ensure it supports the v2 Registry API.
