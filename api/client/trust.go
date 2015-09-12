@@ -90,6 +90,13 @@ func trustServer(index *registry.IndexInfo) (string, error) {
 	if index.Official {
 		return registry.NotaryServer, nil
 	}
+
+	// Ping the registry to attempt trust resolution
+	endpoint, err := registry.NewEndpoint(index, nil, registry.APIVersion2)
+	if err == nil && endpoint.TrustServer != "" {
+		return endpoint.TrustServer, nil
+	}
+
 	return "https://" + index.Name, nil
 }
 
