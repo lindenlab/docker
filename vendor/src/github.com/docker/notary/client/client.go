@@ -308,16 +308,10 @@ func (r *NotaryRepository) GetTargetByName(name string) (*Target, error) {
 		return nil, err
 	}
 
-	err = c.Update()
-	if err != nil {
-		if err, ok := err.(signed.ErrExpired); ok {
-			return nil, ErrExpired{err}
-		}
-		return nil, err
-	}
-
 	meta, err := c.TargetMeta(name)
-	if meta == nil {
+	if errExp, ok := err.(signed.ErrExpired); ok {
+		return nil, ErrExpired{errExp}
+	} else if meta == nil {
 		return nil, fmt.Errorf("No trust data for %s", name)
 	} else if err != nil {
 		return nil, err
@@ -542,27 +536,22 @@ func (r *NotaryRepository) saveMetadata(rootCryptoService signed.CryptoService) 
 }
 
 func (r *NotaryRepository) bootstrapClient() (*tufclient.Client, error) {
-	var rootJSON []byte
-	remote, err := getRemoteStore(r.baseURL, r.gun, r.roundTrip)
-	if err == nil {
-		// if remote store successfully set up, try and get root from remote
-		rootJSON, err = remote.GetMeta("root", maxSize)
-	}
-
-	// if remote store couldn't be setup, or we failed to get a root from it
-	// load the root from cache (offline operation)
+	remote, errStore := getRemoteStore(r.baseURL, r.gun, r.roundTrip)
+	// first, attempt to load the root from cache
+	rootJSON, err := r.fileStore.GetMeta("root", maxSize)
 	if err != nil {
-		if err, ok := err.(store.ErrMetaNotFound); ok {
-			// if the error was MetaNotFound then we successfully contacted
-			// the store and it doesn't know about the repo.
-			return nil, err
-		}
-		rootJSON, err = r.fileStore.GetMeta("root", maxSize)
-		if err != nil {
-			// if cache didn't return a root, we cannot proceed
+		// if cache didn't return a root, pull it from remote store
+		if errStore != nil {
+			// if remote store couldn't be setup, we cannot proceed
 			return nil, store.ErrMetaNotFound{}
 		}
+		// attempt to load the root from the remote store
+		rootJSON, err = remote.GetMeta("root", maxSize)
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	// can't just unmarshal into SignedRoot because validate root
 	// needs the root.Signed field to still be []byte for signature
 	// validation

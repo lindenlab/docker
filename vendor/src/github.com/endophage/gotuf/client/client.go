@@ -513,7 +513,9 @@ func (c Client) RoleTargetsPath(role string, hashSha256 string, consistent bool)
 // TargetMeta ensures the repo is up to date, downloading the minimum
 // necessary metadata files
 func (c Client) TargetMeta(path string) (*data.FileMeta, error) {
-	c.Update()
+	if err := c.Update(); err != nil {
+		return nil, err
+	}
 	var meta *data.FileMeta
 
 	pathDigest := sha256.Sum256([]byte(path))
