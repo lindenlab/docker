@@ -3044,7 +3044,7 @@ func (s *DockerTrustSuite) TestTrustedRun(c *check.C) {
 	}
 
 	if !strings.Contains(string(out), "Tagging") {
-		c.Fatalf("Missing expected output on trusted push:\n%s", out)
+		c.Fatalf("Missing expected output on trusted run:\n%s", out)
 	}
 
 	dockerCmd(c, "rmi", repoName)
@@ -3155,7 +3155,7 @@ func (s *DockerTrustSuite) TestTrustedRunFromBadTrustServer(c *check.C) {
 	}
 
 	if !strings.Contains(string(out), "Tagging") {
-		c.Fatalf("Missing expected output on trusted push:\n%s", out)
+		c.Fatalf("Missing expected output on trusted run:\n%s", out)
 	}
 
 	dockerCmd(c, "rmi", repoName)
@@ -3182,7 +3182,33 @@ func (s *DockerTrustSuite) TestTrustedRunFromBadTrustServer(c *check.C) {
 		c.Fatalf("Missing expected output on trusted push:\n%s", out)
 	}
 
-	// Now, try running with the original client from this new trust server. This should fail.
+	// Ensure that run still uses the current repo without attempting to pull using the evil server.
+	runCmd = exec.Command(dockerBinary, "run", repoName)
+	s.trustedCmd(runCmd)
+	out, _, err = runCommandWithOutput(runCmd)
+	if err != nil {
+		c.Fatalf("Error running trusted run: %s\n%s", err, out)
+	}
+	if strings.Contains(string(out), "Tagging") {
+		c.Fatalf("Unexpected output on trusted run:\n%s", out)
+	}
+
+	// Try running with the original client from this new trust server. This should fail.
+	runCmd = exec.Command(dockerBinary, "run", "--pull", repoName)
+	s.trustedCmd(runCmd)
+	out, _, err = runCommandWithOutput(runCmd)
+	if err == nil {
+		c.Fatalf("Expected to fail on this run due to different remote data: %s\n%s", err, out)
+	}
+
+	if !strings.Contains(string(out), "failed to validate data with current trusted certificates") {
+		c.Fatalf("Missing expected output on trusted run:\n%s", out)
+	}
+
+	// Remove this image, and run the previous test again to exercise the pull fallback.
+	dockerCmd(c, "--config", evilLocalConfigDir, "rmi", repoName)
+
+	// Once again, try running with the original client from this new trust server. This should fail.
 	runCmd = exec.Command(dockerBinary, "run", repoName)
 	s.trustedCmd(runCmd)
 	out, _, err = runCommandWithOutput(runCmd)
@@ -3191,7 +3217,7 @@ func (s *DockerTrustSuite) TestTrustedRunFromBadTrustServer(c *check.C) {
 	}
 
 	if !strings.Contains(string(out), "failed to validate data with current trusted certificates") {
-		c.Fatalf("Missing expected output on trusted push:\n%s", out)
+		c.Fatalf("Missing expected output on trusted run:\n%s", out)
 	}
 }
 

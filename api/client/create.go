@@ -98,9 +98,12 @@ func (cli *DockerCli) createContainer(createConfig *createConfig) (*types.Contai
 
 	mergedConfig := runconfig.MergeConfigs(config, hostConfig)
 
-	var containerIDFile *cidFile
+	var (
+		containerIDFile *cidFile
+		trustedRef      registry.Reference
+		err             error
+	)
 	if cidfile != "" {
-		var err error
 		if containerIDFile, err = newCIDFile(cidfile); err != nil {
 			return nil, err
 		}
@@ -111,29 +114,43 @@ func (cli *DockerCli) createContainer(createConfig *createConfig) (*types.Contai
 	if tag == "" {
 		tag = tags.DefaultTag
 	}
-
 	ref := registry.ParseReference(tag)
-	var trustedRef registry.Reference
 
 	if pull {
-		if err := cli.pullImageCustomOut(config.Image, cli.err); err != nil {
-			return nil, err
+		if isTrusted() {
+			// For the trusted case, setting config.Image to the trust (notary) reference
+			// should be sufficient to check for updates.
+			if !ref.HasDigest() {
+				trustedRef, err = cli.trustedReference(repo, ref)
+				if err != nil {
+					return nil, err
+				}
+				config.Image = trustedRef.ImageName(repo)
+			}
+		} else {
+			// For the untrusted case, we perform a pull on the image before attempting create.
+			fmt.Fprintf(cli.err, "Pulling image '%s'\n", ref.ImageName(repo))
+
+			// we don't want to write to stdout anything apart from container.ID
+			if err = cli.pullImageCustomOut(config.Image, cli.err); err != nil {
+				return nil, err
+			}
 		}
 	}
 
-	if isTrusted() && !ref.HasDigest() {
-		var err error
-		trustedRef, err = cli.trustedReference(repo, ref)
-		if err != nil {
-			return nil, err
-		}
-		config.Image = trustedRef.ImageName(repo)
-	}
 	//create the container
 	serverResp, err := cli.call("POST", "/containers/create?"+containerValues.Encode(), mergedConfig, nil)
 	//if image not found try to pull it
 	if serverResp.statusCode == 404 && strings.Contains(err.Error(), config.Image) {
 		fmt.Fprintf(cli.err, "Unable to find image '%s' locally\n", ref.ImageName(repo))
+
+		if isTrusted() && !ref.HasDigest() && trustedRef == nil {
+			trustedRef, err = cli.trustedReference(repo, ref)
+			if err != nil {
+				return nil, err
+			}
+			config.Image = trustedRef.ImageName(repo)
+		}
 
 		// we don't want to write to stdout anything apart from container.ID
 		if err = cli.pullImageCustomOut(config.Image, cli.err); err != nil {
