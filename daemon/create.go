@@ -4,6 +4,7 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/api/types"
 	containertypes "github.com/docker/docker/api/types/container"
+	imagetypes "github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/container"
 	derr "github.com/docker/docker/errors"
 	"github.com/docker/docker/image"
@@ -35,7 +36,7 @@ func (daemon *Daemon) ContainerCreate(params types.ContainerCreateConfig) (types
 
 	container, err := daemon.create(params)
 	if err != nil {
-		return types.ContainerCreateResponse{Warnings: warnings}, daemon.imageNotExistToErrcode(err)
+		return types.ContainerCreateResponse{Warnings: warnings}, imagetypes.ImageDoesNotExistToErrcode(err)
 	}
 
 	return types.ContainerCreateResponse{ID: container.ID, Warnings: warnings}, nil

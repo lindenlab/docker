@@ -46,7 +46,7 @@ func (cli *DockerCli) CmdBuild(args ...string) error {
 	noCache := cmd.Bool([]string{"-no-cache"}, false, "Do not use cache when building the image")
 	rm := cmd.Bool([]string{"-rm"}, true, "Remove intermediate containers after a successful build")
 	forceRm := cmd.Bool([]string{"-force-rm"}, false, "Always remove intermediate containers")
-	pull := cmd.Bool([]string{"-pull"}, false, "Always attempt to pull a newer version of the image")
+	flPull := addPullFlag(cmd)
 	dockerfileName := cmd.String([]string{"f", "-file"}, "", "Name of the Dockerfile (Default is 'PATH/Dockerfile')")
 	flMemoryString := cmd.String([]string{"m", "-memory"}, "", "Memory limit")
 	flMemorySwap := cmd.String([]string{"-memory-swap"}, "", "Swap limit equal to memory plus swap: '-1' to enable unlimited swap")
@@ -124,7 +124,8 @@ func (cli *DockerCli) CmdBuild(args ...string) error {
 	// Resolve the FROM lines in the Dockerfile to trusted digest references
 	// using Notary. On a successful build, we must tag the resolved digests
 	// to the original name specified in the Dockerfile.
-	newDockerfile, resolvedTags, err := rewriteDockerfileFrom(filepath.Join(contextDir, relDockerfile), cli.trustedReference)
+	pullBehavior, translator := cli.trustedPullBehavior(flPull.Val())
+	newDockerfile, resolvedTags, err := rewriteDockerfileFrom(filepath.Join(contextDir, relDockerfile), translator)
 	if err != nil {
 		return fmt.Errorf("unable to process Dockerfile: %v", err)
 	}
@@ -222,7 +223,7 @@ func (cli *DockerCli) CmdBuild(args ...string) error {
 		NoCache:        *noCache,
 		Remove:         *rm,
 		ForceRemove:    *forceRm,
-		PullParent:     *pull,
+		PullParent:     pullBehavior.String(),
 		Isolation:      *isolation,
 		CPUSetCPUs:     *flCPUSetCpus,
 		CPUSetMems:     *flCPUSetMems,
@@ -552,7 +553,7 @@ type resolvedTag struct {
 // "FROM <image>" instructions to a digest reference. `translator` is a
 // function that takes a repository name and tag reference and returns a
 // trusted digest reference.
-func rewriteDockerfileFrom(dockerfileName string, translator func(reference.NamedTagged) (reference.Canonical, error)) (newDockerfile *trustedDockerfile, resolvedTags []*resolvedTag, err error) {
+func rewriteDockerfileFrom(dockerfileName string, translator reference.Translator) (newDockerfile *trustedDockerfile, resolvedTags []*resolvedTag, err error) {
 	dockerfile, err := os.Open(dockerfileName)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to open Dockerfile: %v", err)
@@ -583,25 +584,28 @@ func rewriteDockerfileFrom(dockerfileName string, translator func(reference.Name
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		matches := dockerfileFromLinePattern.FindStringSubmatch(line)
-		if matches != nil && matches[1] != api.NoBaseImageSpecifier {
-			// Replace the line with a resolved "FROM repo@digest"
-			ref, err := reference.ParseNamed(matches[1])
-			if err != nil {
-				return nil, nil, err
-			}
-			ref = reference.WithDefaultTag(ref)
-			if ref, ok := ref.(reference.NamedTagged); ok && isTrusted() {
-				trustedRef, err := translator(ref)
+		// Only rewrite if a translator was given.
+		if translator != nil {
+			matches := dockerfileFromLinePattern.FindStringSubmatch(line)
+			if matches != nil && matches[1] != api.NoBaseImageSpecifier {
+				// Replace the line with a resolved "FROM repo@digest"
+				ref, err := reference.ParseNamed(matches[1])
 				if err != nil {
 					return nil, nil, err
 				}
+				ref = reference.WithDefaultTag(ref)
+				if ref, ok := ref.(reference.NamedTagged); ok {
+					trustedRef, err := translator(ref)
+					if err != nil {
+						return nil, nil, err
+					}
 
-				line = dockerfileFromLinePattern.ReplaceAllLiteralString(line, fmt.Sprintf("FROM %s", trustedRef.String()))
-				resolvedTags = append(resolvedTags, &resolvedTag{
-					digestRef: trustedRef,
-					tagRef:    ref,
-				})
+					line = dockerfileFromLinePattern.ReplaceAllLiteralString(line, fmt.Sprintf("FROM %s", trustedRef.String()))
+					resolvedTags = append(resolvedTags, &resolvedTag{
+						digestRef: trustedRef,
+						tagRef:    ref,
+					})
+				}
 			}
 		}
 

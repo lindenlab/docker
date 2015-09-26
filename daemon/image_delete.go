@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/docker/docker/api/types"
+	imagetypes "github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/container"
 	derr "github.com/docker/docker/errors"
 	"github.com/docker/docker/image"
@@ -54,7 +55,7 @@ func (daemon *Daemon) ImageDelete(imageRef string, force, prune bool) ([]types.I
 
 	imgID, err := daemon.GetImageID(imageRef)
 	if err != nil {
-		return nil, daemon.imageNotExistToErrcode(err)
+		return nil, imagetypes.ImageDoesNotExistToErrcode(err)
 	}
 
 	repoRefs := daemon.referenceStore.References(imgID)

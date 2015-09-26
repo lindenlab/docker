@@ -19,6 +19,7 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/api"
 	"github.com/docker/docker/api/types/container"
+	imagetypes "github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/strslice"
 	"github.com/docker/docker/builder"
 	derr "github.com/docker/docker/errors"
@@ -208,14 +209,25 @@ func from(b *Builder, args []string, attributes map[string]bool, original string
 		err   error
 	)
 	// TODO: don't use `name`, instead resolve it to a digest
-	if !b.Pull {
-		image, err = b.docker.GetImage(name)
-		// TODO: shouldn't we error out if error is different from "not found" ?
-	}
-	if image == nil {
+
+	if b.Pull == imagetypes.PullAlways {
 		image, err = b.docker.Pull(name)
 		if err != nil {
 			return err
+		}
+	} else {
+		image, err = b.docker.GetImage(name)
+		if err != nil {
+			if !imagetypes.IsErrImageDoesNotExist(err) {
+				return err
+			}
+			if b.Pull != imagetypes.PullMissing {
+				return err
+			}
+			image, err = b.docker.Pull(name)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return b.processImageFrom(image)

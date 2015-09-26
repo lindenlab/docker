@@ -7,6 +7,7 @@ import (
 
 	"github.com/docker/docker/api/client/inspect"
 	"github.com/docker/docker/api/client/lib"
+	"github.com/docker/docker/api/types/image"
 	Cli "github.com/docker/docker/cli"
 	flag "github.com/docker/docker/pkg/mflag"
 )
@@ -67,7 +68,7 @@ func (cli *DockerCli) inspectAll(getSize bool) inspectSearcher {
 			if lib.IsErrContainerNotFound(err) {
 				i, rawImage, err := cli.client.ImageInspectWithRaw(ref, getSize)
 				if err != nil {
-					if lib.IsErrImageNotFound(err) {
+					if image.IsErrImageDoesNotExist(err) {
 						return nil, nil, fmt.Errorf("Error: No such image or container: %s", ref)
 					}
 					return nil, nil, err

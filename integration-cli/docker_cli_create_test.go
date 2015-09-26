@@ -287,7 +287,7 @@ func (s *DockerTrustSuite) TestTrustedCreate(c *check.C) {
 	s.trustedCmd(createCmd)
 	out, _, err := runCommandWithOutput(createCmd)
 	c.Assert(err, check.IsNil)
-	c.Assert(string(out), checker.Contains, "Tagging", check.Commentf("Missing expected output on trusted push:\n%s", out))
+	c.Assert(string(out), checker.Contains, "Tagging", check.Commentf("Missing expected output on trusted create:\n%s", out))
 
 	dockerCmd(c, "rmi", repoName)
 
@@ -377,7 +377,7 @@ func (s *DockerTrustSuite) TestTrustedCreateFromBadTrustServer(c *check.C) {
 	s.trustedCmd(createCmd)
 	out, _, err = runCommandWithOutput(createCmd)
 	c.Assert(err, check.IsNil)
-	c.Assert(string(out), checker.Contains, "Tagging", check.Commentf("Missing expected output on trusted push:\n%s", out))
+	c.Assert(string(out), checker.Contains, "Tagging", check.Commentf("Missing expected output on trusted create:\n%s", out))
 
 	dockerCmd(c, "rmi", repoName)
 
@@ -413,5 +413,67 @@ func (s *DockerSuite) TestCreateStopSignal(c *check.C) {
 	res, err := inspectFieldJSON(name, "Config.StopSignal")
 	c.Assert(err, check.IsNil)
 	c.Assert(res, checker.Contains, "9")
+
+}
+
+func (s *DockerSuite) TestCreateWithPull(c *check.C) {
+	testRequires(c, Network)
+
+	// pull image when missing (default)
+	dockerCmd(c, "rmi", "hello-world")
+	out, _, err := dockerCmdWithError("create", "hello-world")
+	c.Assert(err, check.IsNil, check.Commentf(out))
+	c.Assert(out, checker.Contains, "Pulling from ", check.Commentf("expected pull fallback"))
+
+	// no pull image if already exists
+	out, _, err = dockerCmdWithError("create", "hello-world")
+	c.Assert(err, check.IsNil, check.Commentf(out))
+	c.Assert(out, checker.Not(checker.Contains), "Pulling from ", check.Commentf("unexpected pull fallback"))
+
+	// create with --pull still pulls the image
+	// even if the image exists on local
+	out, _, err = dockerCmdWithError("create", "--pull", "hello-world")
+	c.Assert(err, check.IsNil, check.Commentf(out))
+	if !(strings.Contains(out, "Downloaded newer image for hello-world:latest") || strings.Contains(out, "Image is up to date for hello-world:latest")) {
+		c.Fatalf("expected to download latest image from docker hub")
+	}
+}
+
+func (s *DockerTrustSuite) TestTrustedCreateWithPull(c *check.C) {
+	repoName := s.setupTrustedImage(c, "trusted-create-with-pull")
+
+	// pull image when missing (default)
+	createCmd := exec.Command(dockerBinary, "create", repoName)
+	s.trustedCmd(createCmd)
+	out, _, err := runCommandWithOutput(createCmd)
+	c.Assert(err, check.IsNil, check.Commentf(out))
+	c.Assert(out, checker.Contains, "Pulling from ", check.Commentf("expected pull fallback"))
+
+	// no pull image if already exists
+	// create with --pull (default, for trust) verifies the image is up to date
+	// no pull should be performed in this case (just verification)
+	createCmd = exec.Command(dockerBinary, "--debug", "create", "--pull", repoName)
+	s.trustedCmd(createCmd)
+	out, _, err = runCommandWithOutput(createCmd)
+	c.Assert(err, check.IsNil, check.Commentf(out))
+	c.Assert(out, checker.Contains, "successfully verified targets", check.Commentf("expected trust verification"))
+	c.Assert(out, checker.Not(checker.Contains), "Pulling from ", check.Commentf("unexpected pull fallback"))
+
+	// create with --pull=false will neither pull nor verify the image
+	createCmd = exec.Command(dockerBinary, "--debug", "create", "--pull=false", repoName)
+	s.trustedCmd(createCmd)
+	out, _, err = runCommandWithOutput(createCmd)
+	c.Assert(err, check.IsNil, check.Commentf(out))
+	c.Assert(out, checker.Not(checker.Contains), "successfully verified targets", check.Commentf("unexpected trust verification"))
+	c.Assert(out, checker.Not(checker.Contains), "Pulling from ", check.Commentf("unexpected pull"))
+
+	// create with --pull=false will neither pull nor verify the image
+	// gives an error if there is no local image
+	dockerCmd(c, "rmi", repoName)
+	createCmd = exec.Command(dockerBinary, "--debug", "create", "--pull=false", repoName)
+	s.trustedCmd(createCmd)
+	out, _, err = runCommandWithOutput(createCmd)
+	c.Assert(err, check.NotNil, check.Commentf("expected error on trusted --pull=false:\n%s", out))
+	c.Assert(out, checker.Contains, "No such image", check.Commentf("expected no such image error string"))
 
 }

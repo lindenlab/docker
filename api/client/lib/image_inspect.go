@@ -8,6 +8,7 @@ import (
 	"net/url"
 
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/image"
 )
 
 // ImageInspectWithRaw returns the image information and it's raw representation.
@@ -19,7 +20,7 @@ func (cli *Client) ImageInspectWithRaw(imageID string, getSize bool) (types.Imag
 	serverResp, err := cli.get("/images/"+imageID+"/json", query, nil)
 	if err != nil {
 		if serverResp.statusCode == http.StatusNotFound {
-			return types.ImageInspect{}, nil, imageNotFoundError{imageID}
+			return types.ImageInspect{}, nil, image.ErrImageDoesNotExist{imageID}
 		}
 		return types.ImageInspect{}, nil, err
 	}

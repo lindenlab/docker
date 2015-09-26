@@ -15,6 +15,7 @@ import (
 	"github.com/docker/docker/api/server/httputils"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/builder"
 	"github.com/docker/docker/builder/dockerfile"
 	"github.com/docker/docker/daemon/daemonbuilder"
@@ -114,8 +115,17 @@ func (br *buildRouter) postBuild(ctx context.Context, w http.ResponseWriter, r *
 	} else {
 		buildConfig.Remove = httputils.BoolValue(r, "rm")
 	}
-	if httputils.BoolValue(r, "pull") && version.GreaterThanOrEqualTo("1.16") {
-		buildConfig.Pull = true
+
+	buildConfig.Pull = image.PullMissing
+	if version.GreaterThanOrEqualTo("1.22") {
+		pullVal := r.FormValue("pull")
+		pullBehavior, err := image.ParsePullBehavior(pullVal)
+		if err != nil {
+			return errf(err)
+		}
+		buildConfig.Pull = pullBehavior
+	} else if httputils.BoolValue(r, "pull") && version.GreaterThanOrEqualTo("1.16") {
+		buildConfig.Pull = image.PullAlways
 	}
 
 	repoAndTags, err := sanitizeRepoAndTags(r.Form["t"])

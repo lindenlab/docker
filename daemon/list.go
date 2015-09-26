@@ -9,6 +9,7 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
+	imagetypes "github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/container"
 	"github.com/docker/docker/image"
 	"github.com/docker/docker/pkg/graphdb"
@@ -324,7 +325,7 @@ func (daemon *Daemon) transformContainer(container *container.Container, ctx *li
 	image := container.Config.Image // if possible keep the original ref
 	if image != container.ImageID.String() {
 		id, err := daemon.GetImageID(image)
-		if _, isDNE := err.(ErrImageDoesNotExist); err != nil && !isDNE {
+		if err != nil && !imagetypes.IsErrImageDoesNotExist(err) {
 			return nil, err
 		}
 		if err != nil || id != container.ImageID {

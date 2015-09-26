@@ -23,6 +23,7 @@ import (
 	"github.com/docker/docker/api/types"
 	containertypes "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
+	imagetypes "github.com/docker/docker/api/types/image"
 	registrytypes "github.com/docker/docker/api/types/registry"
 	"github.com/docker/docker/api/types/strslice"
 	"github.com/docker/docker/container"
@@ -87,15 +88,6 @@ var (
 
 	errSystemNotSupported = errors.New("The Docker daemon is not supported on this platform.")
 )
-
-// ErrImageDoesNotExist is error returned when no image can be found for a reference.
-type ErrImageDoesNotExist struct {
-	RefOrID string
-}
-
-func (e ErrImageDoesNotExist) Error() string {
-	return fmt.Sprintf("no such id: %s", e.RefOrID)
-}
 
 type contStore struct {
 	s map[string]*container.Container
@@ -1310,7 +1302,7 @@ func (daemon *Daemon) GetImageID(refOrID string) (image.ID, error) {
 		return id, nil
 	}
 
-	return "", ErrImageDoesNotExist{refOrID}
+	return "", imagetypes.ErrImageDoesNotExist{refOrID}
 }
 
 // GetImage returns an image corresponding to the image referred to by refOrID.

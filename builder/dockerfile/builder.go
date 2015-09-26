@@ -11,6 +11,7 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/builder"
 	"github.com/docker/docker/builder/dockerfile/parser"
 	"github.com/docker/docker/pkg/stringid"
@@ -50,7 +51,7 @@ type Config struct {
 	UseCache    bool
 	Remove      bool
 	ForceRemove bool
-	Pull        bool
+	Pull        image.PullBehavior
 	BuildArgs   map[string]string // build-time args received in build context for expansion/substitution and commands in 'run'.
 	Isolation   container.IsolationLevel
 

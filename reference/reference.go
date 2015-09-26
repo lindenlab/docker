@@ -20,6 +20,8 @@ const (
 	DefaultRepoPrefix = "library/"
 )
 
+type Translator func(NamedTagged) (Canonical, error)
+
 // Named is an object with a full name
 type Named interface {
 	// Name returns normalized repository name, like "ubuntu".

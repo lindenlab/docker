@@ -126,7 +126,7 @@ type ImageBuildOptions struct {
 	NoCache        bool
 	Remove         bool
 	ForceRemove    bool
-	PullParent     bool
+	PullParent     string
 	Isolation      string
 	CPUSetCPUs     string
 	CPUSetMems     string

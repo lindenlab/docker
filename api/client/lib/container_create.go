@@ -7,6 +7,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
 )
 
 type configWrapper struct {
@@ -31,13 +32,13 @@ func (cli *Client) ContainerCreate(config *container.Config, hostConfig *contain
 	serverResp, err := cli.post("/containers/create", query, body, nil)
 	if err != nil {
 		if serverResp != nil && serverResp.statusCode == 404 && strings.Contains(err.Error(), config.Image) {
-			return response, imageNotFoundError{config.Image}
+			return response, image.ErrImageDoesNotExist{config.Image}
 		}
 		return response, err
 	}
 
 	if serverResp.statusCode == 404 && strings.Contains(err.Error(), config.Image) {
-		return response, imageNotFoundError{config.Image}
+		return response, image.ErrImageDoesNotExist{config.Image}
 	}
 
 	if err != nil {
