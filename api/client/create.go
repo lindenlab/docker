@@ -94,28 +94,27 @@ func (cli *DockerCli) createContainer(config *runconfig.Config, hostConfig *runc
 		defer containerIDFile.Close()
 	}
 
-	repo, tag := parsers.ParseRepositoryTag(config.Image)
-	if tag == "" {
-		tag = tags.DefaultTag
-	}
-
-	ref := registry.ParseReference(tag)
-	var trustedRef registry.Reference
-
-	if isTrusted() && !ref.HasDigest() {
-		var err error
-		trustedRef, err = cli.trustedReference(repo, ref)
-		if err != nil {
-			return nil, err
-		}
-		config.Image = trustedRef.ImageName(repo)
-	}
-
 	//create the container
 	serverResp, err := cli.call("POST", "/containers/create?"+containerValues.Encode(), mergedConfig, nil)
 	//if image not found try to pull it
 	if serverResp.statusCode == 404 && strings.Contains(err.Error(), config.Image) {
+		repo, tag := parsers.ParseRepositoryTag(config.Image)
+		if tag == "" {
+			tag = tags.DefaultTag
+		}
+
+		ref := registry.ParseReference(tag)
 		fmt.Fprintf(cli.err, "Unable to find image '%s' locally\n", ref.ImageName(repo))
+
+		var trustedRef registry.Reference
+		if isTrusted() && !ref.HasDigest() {
+			var err error
+			trustedRef, err = cli.trustedReference(repo, ref)
+			if err != nil {
+				return nil, err
+			}
+			config.Image = trustedRef.ImageName(repo)
+		}
 
 		// we don't want to write to stdout anything apart from container.ID
 		if err = cli.pullImageCustomOut(config.Image, cli.err); err != nil {

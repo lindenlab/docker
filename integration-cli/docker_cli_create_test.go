@@ -341,7 +341,7 @@ func (s *DockerTrustSuite) TestTrustedCreateFromBadTrustServer(c *check.C) {
 	s.trustedCmd(createCmd)
 	out, _, err = runCommandWithOutput(createCmd)
 	c.Assert(err, check.IsNil)
-	c.Assert(string(out), checker.Contains, "Tagging", check.Commentf("Missing expected output on trusted push:\n%s", out))
+	c.Assert(string(out), checker.Contains, "Tagging", check.Commentf("Missing expected output on trusted create:\n%s", out))
 
 	dockerCmd(c, "rmi", repoName)
 
@@ -361,12 +361,26 @@ func (s *DockerTrustSuite) TestTrustedCreateFromBadTrustServer(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(string(out), checker.Contains, "Signing and pushing trust metadata", check.Commentf("Missing expected output on trusted push:\n%s", out))
 
+	// Ensure that create still uses the current repo without attempting to pull using the evil server.
+	createCmd = exec.Command(dockerBinary, "create", repoName)
+	s.trustedCmd(createCmd)
+	out, _, err = runCommandWithOutput(createCmd)
+	if err != nil {
+		c.Fatalf("Error creating trusted create: %s\n%s", err, out)
+	}
+	if strings.Contains(string(out), "Tagging") {
+		c.Fatalf("Unexpected output on trusted create:\n%s", out)
+	}
+
+	// Remove this image, and run the previous test again to exercise the pull fallback.
+	dockerCmd(c, "--config", evilLocalConfigDir, "rmi", repoName)
+
 	// Now, try creating with the original client from this new trust server. This should fail.
 	createCmd = exec.Command(dockerBinary, "create", repoName)
 	s.trustedCmd(createCmd)
 	out, _, err = runCommandWithOutput(createCmd)
 	c.Assert(err, check.Not(check.IsNil))
-	c.Assert(string(out), checker.Contains, "failed to validate data with current trusted certificates", check.Commentf("Missing expected output on trusted push:\n%s", out))
+	c.Assert(string(out), checker.Contains, "failed to validate data with current trusted certificates", check.Commentf("Missing expected output on trusted create:\n%s", out))
 
 }
 
