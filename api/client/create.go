@@ -17,6 +17,14 @@ import (
 	"github.com/docker/docker/runconfig"
 )
 
+type createConfig struct {
+	config     *runconfig.Config
+	hostConfig *runconfig.HostConfig
+	cidfile    string
+	name       string
+	pull       bool
+}
+
 func (cli *DockerCli) pullImage(image string) error {
 	return cli.pullImageCustomOut(image, cli.out)
 }
@@ -77,7 +85,12 @@ func newCIDFile(path string) (*cidFile, error) {
 	return &cidFile{path: path, file: f}, nil
 }
 
-func (cli *DockerCli) createContainer(config *runconfig.Config, hostConfig *runconfig.HostConfig, cidfile, name string) (*types.ContainerCreateResponse, error) {
+func (cli *DockerCli) createContainer(createConfig *createConfig) (*types.ContainerCreateResponse, error) {
+	config := createConfig.config
+	hostConfig := createConfig.hostConfig
+	cidfile := createConfig.cidfile
+	name := createConfig.name
+	pull := createConfig.pull
 	containerValues := url.Values{}
 	if name != "" {
 		containerValues.Set("name", name)
@@ -85,30 +98,53 @@ func (cli *DockerCli) createContainer(config *runconfig.Config, hostConfig *runc
 
 	mergedConfig := runconfig.MergeConfigs(config, hostConfig)
 
-	var containerIDFile *cidFile
+	var (
+		containerIDFile *cidFile
+		trustedRef registry.Reference
+		err error
+	)
 	if cidfile != "" {
-		var err error
 		if containerIDFile, err = newCIDFile(cidfile); err != nil {
 			return nil, err
 		}
 		defer containerIDFile.Close()
 	}
 
+	repo, tag := parsers.ParseRepositoryTag(config.Image)
+	if tag == "" {
+		tag = tags.DefaultTag
+	}
+	ref := registry.ParseReference(tag)
+
+	if pull {
+		if isTrusted() {
+			// For the trusted case, setting config.Image to the trust (notary) reference
+			// should be sufficient to check for updates.
+			if !ref.HasDigest() {
+				trustedRef, err = cli.trustedReference(repo, ref)
+				if err != nil {
+					return nil, err
+				}
+				config.Image = trustedRef.ImageName(repo)
+			}
+		} else {
+			// For the untrusted case, we perform a pull on the image before attempting create.
+			fmt.Fprintf(cli.err, "Pulling image '%s'\n", ref.ImageName(repo))
+
+			// we don't want to write to stdout anything apart from container.ID
+			if err = cli.pullImageCustomOut(config.Image, cli.err); err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	//create the container
 	serverResp, err := cli.call("POST", "/containers/create?"+containerValues.Encode(), mergedConfig, nil)
 	//if image not found try to pull it
 	if serverResp.statusCode == 404 && strings.Contains(err.Error(), config.Image) {
-		repo, tag := parsers.ParseRepositoryTag(config.Image)
-		if tag == "" {
-			tag = tags.DefaultTag
-		}
-
-		ref := registry.ParseReference(tag)
 		fmt.Fprintf(cli.err, "Unable to find image '%s' locally\n", ref.ImageName(repo))
 
-		var trustedRef registry.Reference
-		if isTrusted() && !ref.HasDigest() {
-			var err error
+		if isTrusted() && !ref.HasDigest() && trustedRef == nil {
 			trustedRef, err = cli.trustedReference(repo, ref)
 			if err != nil {
 				return nil, err
@@ -159,6 +195,7 @@ func (cli *DockerCli) createContainer(config *runconfig.Config, hostConfig *runc
 // Usage: docker create [OPTIONS] IMAGE [COMMAND] [ARG...]
 func (cli *DockerCli) CmdCreate(args ...string) error {
 	cmd := Cli.Subcmd("create", []string{"IMAGE [COMMAND] [ARG...]"}, Cli.DockerCommands["create"].Description, true)
+	flPull := cmd.Bool([]string{"-pull"}, false, "Always attempt to pull a newer version of the image")
 	addTrustedFlags(cmd, true)
 
 	// These are flags not stored in Config/HostConfig
@@ -175,7 +212,14 @@ func (cli *DockerCli) CmdCreate(args ...string) error {
 		cmd.Usage()
 		return nil
 	}
-	response, err := cli.createContainer(config, hostConfig, hostConfig.ContainerIDFile, *flName)
+	createConfig := &createConfig{
+		config:     config,
+		hostConfig: hostConfig,
+		cidfile:    hostConfig.ContainerIDFile,
+		name:       *flName,
+		pull:       *flPull,
+	}
+	response, err := cli.createContainer(createConfig)
 	if err != nil {
 		return err
 	}
