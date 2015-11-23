@@ -414,8 +414,13 @@ func (s *DockerTrustSuite) TestTrustedCreateFromBadTrustServer(c *check.C) {
 	createCmd := exec.Command(dockerBinary, "create", repoName)
 	s.trustedCmd(createCmd)
 	out, _, err = runCommandWithOutput(createCmd)
-	c.Assert(err, check.IsNil)
-	c.Assert(string(out), checker.Contains, "Tagging", check.Commentf("Missing expected output on trusted create:\n%s", out))
+	if err != nil {
+		c.Fatalf("Error creating trusted create: %s\n%s", err, out)
+	}
+
+	if !strings.Contains(string(out), "Tagging") {
+		c.Fatalf("Missing expected output on trusted push:\n%s", out)
+	}
 
 	dockerCmd(c, "rmi", repoName)
 
