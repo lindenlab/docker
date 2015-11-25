@@ -36,6 +36,8 @@ DOCKER_RUN_DOCS := docker run --rm -it $(DOCS_MOUNT) -e AWS_S3_BUCKET -e NOCACHE
 # for some docs workarounds (see below in "docs-build" target)
 GITCOMMIT := $(shell git rev-parse --short HEAD 2>/dev/null)
 
+VERSION := $(shell cat ./VERSION)
+
 default: binary
 
 all: build
@@ -47,8 +49,11 @@ binary: build
 cross: build
 	$(DOCKER_RUN_DOCKER) hack/make.sh binary cross
 
-deb: build
+build-deb: build
 	$(DOCKER_RUN_DOCKER) hack/make.sh binary build-deb
+
+deb: build-deb packages
+	bash -c 'cp "$(CURDIR)/$(BIND_DIR)/$(VERSION)/build-deb/debian-jessie/"*.{deb,changes,build,dsc} packages/'
 
 rpm: build
 	$(DOCKER_RUN_DOCKER) hack/make.sh binary build-rpm
@@ -76,6 +81,9 @@ build: bundles
 
 bundles:
 	mkdir bundles
+
+packages:
+	mkdir packages
 
 docs:
 	$(MAKE) -C docs docs
