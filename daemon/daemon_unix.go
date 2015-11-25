@@ -87,7 +87,7 @@ func checkKernel() error {
 	if !checkKernelVersion(3, 10, 0) {
 		v, _ := kernel.GetKernelVersion()
 		if os.Getenv("DOCKER_NOWARN_KERNEL_VERSION") == "" {
-			logrus.Warnf("Your Linux kernel version %s can be unstable running docker. Please upgrade your kernel to 3.10.0.", v.String())
+			logrus.Fatalf("Your Linux kernel version %s is unstable running Docker. Please upgrade your kernel to 3.10+.", v.String())
 		}
 	}
 	return nil
