@@ -55,6 +55,9 @@ build-deb: build
 deb: build-deb packages
 	bash -c 'cp "$(CURDIR)/$(BIND_DIR)/$(VERSION)/build-deb/debian-jessie/"*.{deb,changes,build,dsc} packages/'
 
+listpackages:
+	@echo docker-engine
+
 rpm: build
 	$(DOCKER_RUN_DOCKER) hack/make.sh binary build-rpm
 
