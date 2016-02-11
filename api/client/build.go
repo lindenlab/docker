@@ -30,8 +30,10 @@ import (
 	"github.com/docker/docker/pkg/urlutil"
 	"github.com/docker/docker/reference"
 	runconfigopts "github.com/docker/docker/runconfig/opts"
+	"github.com/docker/engine-api/client"
 	"github.com/docker/engine-api/types"
 	"github.com/docker/engine-api/types/container"
+	"github.com/docker/engine-api/types/image"
 	"github.com/docker/go-units"
 )
 
@@ -168,11 +170,25 @@ func (cli *DockerCli) CmdBuild(args ...string) error {
 	}
 
 	var resolvedTags []*resolvedTag
-	pullBehavior, translator := cli.trustedPullBehavior(flPull.Val())
-	if translator != nil {
+	pullBehavior := flPull.Val()
+	if isTrusted() && pullBehavior != image.PullNever {
 		// Wrap the tar archive to replace the Dockerfile entry with the rewritten
 		// Dockerfile which uses trusted pulls.
-		context = replaceDockerfileTarWrapper(context, relDockerfile, translator, &resolvedTags)
+		rewriteOnMissing := false
+		switch pullBehavior {
+		case image.PullMissing:
+			// For PullMissing case when trusted, we need to only rewrite the FROM
+			// line if there is no local image.
+			// *TODO: To avoid accidentally falling back to an untrusted image,
+			// ideally pullBehavior would fall back to PullNever if a local image is found.
+			rewriteOnMissing = true
+		case image.PullAlways:
+			// For PullAlways case when trusted, just ensure
+			// we use the translated reference, and only pull
+			// when latest image is missing.
+			pullBehavior = image.PullMissing
+		}
+		context = cli.replaceDockerfileTarWrapper(context, relDockerfile, rewriteOnMissing, &resolvedTags)
 	}
 
 	// Setup an upload progress bar
@@ -553,10 +569,8 @@ type resolvedTag struct {
 }
 
 // rewriteDockerfileFrom rewrites the given Dockerfile by resolving images in
-// "FROM <image>" instructions to a digest reference. `translator` is a
-// function that takes a repository name and tag reference and returns a
-// trusted digest reference.
-func rewriteDockerfileFrom(dockerfile io.Reader, translator reference.TranslatorFunc) (newDockerfile []byte, resolvedTags []*resolvedTag, err error) {
+// "FROM <image>" instructions to a digest reference, using cli.trustedReference
+func (cli *DockerCli) rewriteDockerfileFrom(dockerfile io.Reader, rewriteOnMissing bool) (newDockerfile []byte, resolvedTags []*resolvedTag, err error) {
 	scanner := bufio.NewScanner(dockerfile)
 	buf := bytes.NewBuffer(nil)
 
@@ -573,16 +587,34 @@ func rewriteDockerfileFrom(dockerfile io.Reader, translator reference.Translator
 			}
 			ref = reference.WithDefaultTag(ref)
 			if ref, ok := ref.(reference.NamedTagged); ok {
-				trustedRef, err := translator(ref)
-				if err != nil {
-					return nil, nil, err
+				needsTranslation := true
+				if rewriteOnMissing {
+					// Only run a trusted translation if the
+					// image is missing.
+					_, _, err = cli.client.ImageInspectWithRaw(ref.String(), false)
+					if err == nil {
+						// Local image exists, so no translation is needed.
+						// *TODO: To avoid accidentally falling back to an untrusted image,
+						// ideally this case would change pullBehavior to PullNever.
+						needsTranslation = false
+					} else if !client.IsErrImageNotFound(err) {
+						// Some error besides NotFound was returned while inspecting FROM image.
+						return nil, nil, err
+					}
 				}
 
-				line = dockerfileFromLinePattern.ReplaceAllLiteralString(line, fmt.Sprintf("FROM %s", trustedRef.String()))
-				resolvedTags = append(resolvedTags, &resolvedTag{
-					digestRef: trustedRef,
-					tagRef:    ref,
-				})
+				if needsTranslation {
+					trustedRef, err := cli.trustedReference(ref)
+					if err != nil {
+						return nil, nil, err
+					}
+
+					line = dockerfileFromLinePattern.ReplaceAllLiteralString(line, fmt.Sprintf("FROM %s", trustedRef.String()))
+					resolvedTags = append(resolvedTags, &resolvedTag{
+						digestRef: trustedRef,
+						tagRef:    ref,
+					})
+				}
 			}
 		}
 
@@ -599,7 +631,7 @@ func rewriteDockerfileFrom(dockerfile io.Reader, translator reference.Translator
 // replaces the entry with the given Dockerfile name with the contents of the
 // new Dockerfile. Returns a new tar archive stream with the replaced
 // Dockerfile.
-func replaceDockerfileTarWrapper(inputTarStream io.ReadCloser, dockerfileName string, translator reference.TranslatorFunc, resolvedTags *[]*resolvedTag) io.ReadCloser {
+func (cli *DockerCli) replaceDockerfileTarWrapper(inputTarStream io.ReadCloser, dockerfileName string, rewriteOnMissing bool, resolvedTags *[]*resolvedTag) io.ReadCloser {
 	pipeReader, pipeWriter := io.Pipe()
 	go func() {
 		tarReader := tar.NewReader(inputTarStream)
@@ -626,7 +658,7 @@ func replaceDockerfileTarWrapper(inputTarStream io.ReadCloser, dockerfileName st
 				// generated from a directory on the local filesystem, the
 				// Dockerfile will only appear once in the archive.
 				var newDockerfile []byte
-				newDockerfile, *resolvedTags, err = rewriteDockerfileFrom(content, translator)
+				newDockerfile, *resolvedTags, err = cli.rewriteDockerfileFrom(content, rewriteOnMissing)
 				if err != nil {
 					pipeWriter.CloseWithError(err)
 					return

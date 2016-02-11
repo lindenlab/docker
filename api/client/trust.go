@@ -40,21 +40,25 @@ import (
 )
 
 type pullFlag struct {
-	val bool
+	val image.PullBehavior
 	set bool
 }
 
 func addPullFlag(fs *flag.FlagSet) *pullFlag {
 	fl := &pullFlag{}
-	fs.Var(fl, []string{"-pull"}, "Always attempt to pull a newer version of the image")
+	fs.Var(fl, []string{"-pull"}, "Image pull behavior")
 	return fl
 }
 
-func (b *pullFlag) String() string   { return "<content-trust>" }
-func (b *pullFlag) IsBoolFlag() bool { return true }
+func (b *pullFlag) String() string { return "default" }
 
 func (b *pullFlag) Set(s string) error {
-	v, err := strconv.ParseBool(s)
+	// Allow 'default' to be specified.  It doesn't set this
+	// flag, but it is not an error.
+	if s == "default" {
+		return nil
+	}
+	v, err := image.ParsePullBehavior(s)
 	b.val = v
 	b.set = true
 	return err
@@ -64,25 +68,28 @@ func (b *pullFlag) Get() interface{} {
 	if b.set {
 		return b.val
 	}
-	return isTrusted()
+	if isTrusted() {
+		return image.PullAlways
+	} else {
+		return image.PullMissing
+	}
 }
-func (b *pullFlag) Val() bool {
-	return b.Get().(bool)
+func (b *pullFlag) Val() image.PullBehavior {
+	return b.Get().(image.PullBehavior)
 }
 
-// trustedPullBehavior determines correct pullBehavior and trust translator given the boolean pull flag and the trust setting.
-func (cli *DockerCli) trustedPullBehavior(pull bool) (image.PullBehavior, reference.TranslatorFunc) {
+// trustedPullBehavior determines correct pullBehavior and trust translator given the pull flag and the trust setting.
+func (cli *DockerCli) trustedPullBehavior(pull *pullFlag) (image.PullBehavior, reference.TranslatorFunc) {
 	var translator reference.TranslatorFunc
-	pullBehavior := image.PullMissing
-	if pull {
-		if isTrusted() {
+	pullBehavior := pull.Val()
+	if isTrusted() {
+		switch pullBehavior {
+		case image.PullAlways:
 			translator = cli.trustedReference
-		} else {
-			pullBehavior = image.PullAlways
+			pullBehavior = image.PullMissing
+		case image.PullNever:
+			fmt.Fprintln(cli.err, "WARNING: Skipping content trust verification")
 		}
-	} else if isTrusted() {
-		pullBehavior = image.PullNever
-		fmt.Fprintln(cli.err, "WARNING: Skipping content trust verification")
 	}
 	return pullBehavior, translator
 }

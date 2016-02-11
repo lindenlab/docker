@@ -425,25 +425,44 @@ func (s *DockerSuite) TestCreateWithWorkdir(c *check.C) {
 	dockerCmd(c, "cp", fmt.Sprintf("%s:%s", name, dir), "/tmp")
 }
 
-func (s *DockerSuite) TestCreateWithPull(c *check.C) {
-	testRequires(c, Network)
+func (s *DockerRegistrySuite) TestCreateWithPull(c *check.C) {
+	repoName := fmt.Sprintf("%v/dockercli/createpulltest", privateRegistryURL)
+	// tag the image and upload it to the private registry
+	dockerCmd(c, "tag", "busybox", repoName)
+	dockerCmd(c, "push", repoName)
+	dockerCmd(c, "rmi", repoName)
+
+	// create with --pull=never will not attempt pull fallback
+	out, _, err := dockerCmdWithError("create", "--pull=never", repoName, "true")
+	c.Assert(err, check.NotNil, check.Commentf("expected error on --pull=never:\n%s", out))
+	c.Assert(out, checker.Contains, "Unable to find image", check.Commentf("out: %s", out))
 
 	// pull image when missing (default)
-	dockerCmd(c, "rmi", "busybox")
-	out, _, err := dockerCmdWithError("create", "busybox", "true")
+	out, _, err = dockerCmdWithError("create", "--pull=default", repoName, "true")
 	c.Assert(err, check.IsNil, check.Commentf(out))
 	c.Assert(out, checker.Contains, "Pulling from ", check.Commentf("expected pull fallback"))
 
 	// no pull image if already exists
-	out, _, err = dockerCmdWithError("create", "busybox", "true")
+	out, _, err = dockerCmdWithError("create", "--pull=default", repoName, "true")
 	c.Assert(err, check.IsNil, check.Commentf(out))
 	c.Assert(out, checker.Not(checker.Contains), "Pulling from ", check.Commentf("unexpected pull fallback"))
 
-	// create with --pull still pulls the image
-	// even if the image exists on local
-	out, _, err = dockerCmdWithError("create", "--pull", "busybox", "true")
+	// pull image when missing
+	dockerCmd(c, "rmi", repoName)
+	out, _, err = dockerCmdWithError("create", "--pull=missing", repoName, "true")
 	c.Assert(err, check.IsNil, check.Commentf(out))
-	if !(strings.Contains(out, "Downloaded newer image for busybox:latest") || strings.Contains(out, "Image is up to date for busybox:latest")) {
+	c.Assert(out, checker.Contains, "Pulling from ", check.Commentf("expected pull fallback"))
+
+	// no pull image if already exists
+	out, _, err = dockerCmdWithError("create", "--pull=missing", repoName, "true")
+	c.Assert(err, check.IsNil, check.Commentf(out))
+	c.Assert(out, checker.Not(checker.Contains), "Pulling from ", check.Commentf("unexpected pull fallback"))
+
+	// create with --pull=always still pulls the image
+	// even if the image exists on local
+	out, _, err = dockerCmdWithError("create", "--pull=always", repoName, "true")
+	c.Assert(err, check.IsNil, check.Commentf(out))
+	if !(strings.Contains(out, fmt.Sprintf("Downloaded newer image for %s:latest", repoName)) || strings.Contains(out, fmt.Sprintf("Image is up to date for %s:latest", repoName))) {
 		c.Fatalf("expected to download latest image from docker hub")
 	}
 }
@@ -451,37 +470,66 @@ func (s *DockerSuite) TestCreateWithPull(c *check.C) {
 func (s *DockerTrustSuite) TestTrustedCreateWithPull(c *check.C) {
 	repoName := s.setupTrustedImage(c, "trusted-create-with-pull")
 
-	// pull image when missing (default)
-	createCmd := exec.Command(dockerBinary, "create", repoName)
+	// pull image when missing
+	createCmd := exec.Command(dockerBinary, "create", "--pull=default", repoName)
 	s.trustedCmd(createCmd)
 	out, _, err := runCommandWithOutput(createCmd)
 	c.Assert(err, check.IsNil, check.Commentf(out))
+	c.Assert(out, checker.Contains, "successfully verified targets", check.Commentf("expected trust verification"))
 	c.Assert(out, checker.Contains, "Pulling from ", check.Commentf("expected pull fallback"))
+	c.Assert(out, checker.Contains, "Tagging", check.Commentf("Missing expected output on trusted create:\n%s", out))
 
 	// no pull image if already exists
-	// create with --pull (default, for trust) verifies the image is up to date
+	// create with --pull=default verifies the image is up to date
 	// no pull should be performed in this case (just verification)
-	createCmd = exec.Command(dockerBinary, "--debug", "-l", "debug", "create", "--pull", repoName)
+	createCmd = exec.Command(dockerBinary, "--debug", "-l", "debug", "create", "--pull=default", repoName)
 	s.trustedCmd(createCmd)
 	out, _, err = runCommandWithOutput(createCmd)
 	c.Assert(err, check.IsNil, check.Commentf(out))
 	c.Assert(out, checker.Contains, "successfully verified targets", check.Commentf("expected trust verification"))
 	c.Assert(out, checker.Not(checker.Contains), "Pulling from ", check.Commentf("unexpected pull fallback"))
 
-	// create with --pull=false will neither pull nor verify the image
-	createCmd = exec.Command(dockerBinary, "--debug", "-l", "debug", "create", "--pull=false", repoName)
+	// no pull image if already exists
+	// create with --pull=always (default, for trust) verifies the image is up to date
+	// no pull should be performed in this case (just verification)
+	createCmd = exec.Command(dockerBinary, "--debug", "-l", "debug", "create", "--pull=always", repoName)
+	s.trustedCmd(createCmd)
+	out, _, err = runCommandWithOutput(createCmd)
+	c.Assert(err, check.IsNil, check.Commentf(out))
+	c.Assert(out, checker.Contains, "successfully verified targets", check.Commentf("expected trust verification"))
+	c.Assert(out, checker.Not(checker.Contains), "Pulling from ", check.Commentf("unexpected pull fallback"))
+
+	// create with --pull=never will neither pull nor verify the image
+	createCmd = exec.Command(dockerBinary, "--debug", "-l", "debug", "create", "--pull=never", repoName)
 	s.trustedCmd(createCmd)
 	out, _, err = runCommandWithOutput(createCmd)
 	c.Assert(err, check.IsNil, check.Commentf(out))
 	c.Assert(out, checker.Not(checker.Contains), "successfully verified targets", check.Commentf("unexpected trust verification"))
 	c.Assert(out, checker.Not(checker.Contains), "Pulling from ", check.Commentf("unexpected pull"))
 
-	// create with --pull=false will neither pull nor verify the image
+	// create with --pull=never will neither pull nor verify the image
 	// gives an error if there is no local image
 	dockerCmd(c, "rmi", repoName)
-	createCmd = exec.Command(dockerBinary, "--debug", "-l", "debug", "create", "--pull=false", repoName)
+	createCmd = exec.Command(dockerBinary, "--debug", "-l", "debug", "create", "--pull=never", repoName)
 	s.trustedCmd(createCmd)
 	out, _, err = runCommandWithOutput(createCmd)
-	c.Assert(err, check.NotNil, check.Commentf("expected error on trusted --pull=false:\n%s", out))
+	c.Assert(err, check.NotNil, check.Commentf("expected error on trusted --pull=never:\n%s", out))
 	c.Assert(out, checker.Contains, "Unable to find image", check.Commentf("out: %s", out))
+
+	// create with --pull=missing and no local image
+	createCmd = exec.Command(dockerBinary, "--debug", "-l", "debug", "create", "--pull=missing", repoName)
+	s.trustedCmd(createCmd)
+	out, _, err = runCommandWithOutput(createCmd)
+	c.Assert(err, check.IsNil, check.Commentf(out))
+	c.Assert(out, checker.Contains, "successfully verified targets", check.Commentf("expected trust verification"))
+	c.Assert(out, checker.Contains, "Pulling from ", check.Commentf("expected pull fallback"))
+	c.Assert(out, checker.Contains, "Tagging", check.Commentf("Missing expected output on trusted create:\n%s", out))
+
+	// skip pull when --pull=missing and local image exists
+	createCmd = exec.Command(dockerBinary, "--debug", "-l", "debug", "create", "--pull=missing", repoName)
+	s.trustedCmd(createCmd)
+	out, _, err = runCommandWithOutput(createCmd)
+	c.Assert(err, check.IsNil, check.Commentf(out))
+	c.Assert(out, checker.Not(checker.Contains), "successfully verified targets", check.Commentf("unexpected trust verification"))
+	c.Assert(out, checker.Not(checker.Contains), "Pulling from ", check.Commentf("unexpected pull"))
 }

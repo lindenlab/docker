@@ -147,15 +147,13 @@ func (cli *DockerCli) CmdRun(args ...string) error {
 		hostConfig.ConsoleSize[0], hostConfig.ConsoleSize[1] = cli.getTtySize()
 	}
 
-	pullBehavior, translator := cli.trustedPullBehavior(flPull.Val())
 	createConfig := &createConfig{
 		config:           config,
 		hostConfig:       hostConfig,
 		networkingConfig: networkingConfig,
 		cidfile:          hostConfig.ContainerIDFile,
 		name:             *flName,
-		pull:             pullBehavior,
-		translator:       translator,
+		pullBehavior:     flPull.Val(),
 	}
 	createResponse, err := cli.createContainer(createConfig)
 	if err != nil {

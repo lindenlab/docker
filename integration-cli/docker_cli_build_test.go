@@ -6620,29 +6620,50 @@ func (s *DockerSuite) TestBuildFailsGitNotCallable(c *check.C) {
 	c.Assert(out, checker.Contains, "unable to prepare context: unable to find 'git': ")
 }
 
-func (s *DockerSuite) TestBuildWithPull(c *check.C) {
-	testRequires(c, DaemonIsLinux)
+func (s *DockerRegistrySuite) TestBuildWithPull(c *check.C) {
+	repoName := fmt.Sprintf("%v/dockercli/buildpulltest", privateRegistryURL)
+	// tag the image and upload it to the private registry
+	dockerCmd(c, "tag", "busybox", repoName)
+	dockerCmd(c, "push", repoName)
+	dockerCmd(c, "rmi", repoName)
+
 	name := "testbuildpull"
-	dockerFile := `
-	FROM hello-world
-	`
+	dockerFile := fmt.Sprintf(`
+	FROM %s
+	`, repoName)
+
+	// build with --pull=never will not attempt pull fallback
+	_, out, err := buildImageWithOut(name, dockerFile, true, "--pull=never")
+	c.Assert(err, check.NotNil, check.Commentf("expected error on --pull=never:\n%s", out))
+	c.Assert(out, checker.Contains, "no such id", check.Commentf("out: %s", out))
 
 	// FROM image is pulled when missing (default)
-	_, out, err := buildImageWithOut(name, dockerFile, true)
+	_, out, err = buildImageWithOut(name, dockerFile, true, "--pull=default")
 	c.Assert(err, check.IsNil, check.Commentf(out))
 	c.Assert(out, checker.Contains, "Pulling from ", check.Commentf("expected pull fallback"))
 
 	// FROM image is not pulled if already exists
-	_, out, err = buildImageWithOut(name, dockerFile, true)
+	_, out, err = buildImageWithOut(name, dockerFile, true, "--pull=default")
 	c.Assert(err, check.IsNil, check.Commentf(out))
 	c.Assert(out, check.Not(checker.Contains), "Pulling from ", check.Commentf("unexpected pull fallback"))
 
-	// build with --pull stills try to pull the image from hub
-	// even if the image exists on local
-	_, out, err = buildImageWithOut(name, dockerFile, true, "--pull")
+	// FROM image is pulled when missing
+	dockerCmd(c, "rmi", repoName)
+	_, out, err = buildImageWithOut(name, dockerFile, true, "--pull=missing")
 	c.Assert(err, check.IsNil, check.Commentf(out))
-	if !(strings.Contains(out, "Downloaded newer image for hello-world:latest") || strings.Contains(out, "Image is up to date for hello-world:latest")) {
-		c.Fatalf("expected to download latest image from docker hub")
+	c.Assert(out, checker.Contains, "Pulling from ", check.Commentf("expected pull fallback"))
+
+	// FROM image is not pulled if already exists
+	_, out, err = buildImageWithOut(name, dockerFile, true, "--pull=missing")
+	c.Assert(err, check.IsNil, check.Commentf(out))
+	c.Assert(out, check.Not(checker.Contains), "Pulling from ", check.Commentf("unexpected pull fallback"))
+
+	// build with --pull=always stills try to pull the image from hub
+	// even if the image exists on local
+	_, out, err = buildImageWithOut(name, dockerFile, true, "--pull=always")
+	c.Assert(err, check.IsNil, check.Commentf(out))
+	if !(strings.Contains(out, fmt.Sprintf("Downloaded newer image for %s:latest", repoName)) || strings.Contains(out, fmt.Sprintf("Image is up to date for %s:latest", repoName))) {
+		c.Fatalf("expected to download latest image from docker hub: %s", out)
 	}
 }
 
@@ -6653,37 +6674,68 @@ func (s *DockerTrustSuite) TestTrustedBuildWithPull(c *check.C) {
 	FROM %s
 	`, repoName)
 
-	// FROM image is pulled when missing (default)
-	buildCmd := buildImageCmd(name, dockerFile, true)
+	// pull image when missing
+	buildCmd := buildImageCmd(name, dockerFile, true, "--pull=default")
 	s.trustedCmd(buildCmd)
 	out, _, err := runCommandWithOutput(buildCmd)
 	c.Assert(err, check.IsNil, check.Commentf(out))
-	c.Assert(out, checker.Contains, "Pulling from ", check.Commentf("expected pull fallback"))
+	c.Assert(out, checker.Contains, "successfully verified targets", check.Commentf("expected trust verification"))
+	c.Assert(out, checker.Contains, "Pulling from ", check.Commentf("expected pull"))
+	c.Assert(out, checker.Contains, "Tagging", check.Commentf("Missing expected output on trusted build:\n%s", out))
 
 	// FROM image is not pulled if it already exists
-	// build with --pull (default, for trust) verifies the image is up to date
+	// build with --pull=default verifies the image is up to date
 	// no pull should be performed in this case (just verification)
-	buildCmd = buildImageCmd(name, dockerFile, true, "--pull")
+	buildCmd = buildImageCmd(name, dockerFile, true, "--pull=default")
 	s.trustedCmd(buildCmd)
 	out, _, err = runCommandWithOutput(buildCmd)
 	c.Assert(err, check.IsNil, check.Commentf(out))
 	c.Assert(out, checker.Contains, "successfully verified targets", check.Commentf("expected trust verification"))
 	c.Assert(out, checker.Not(checker.Contains), "Pulling from ", check.Commentf("unexpected pull fallback"))
 
-	// FROM image with --pull=false is neither pulled nor verified
-	buildCmd = buildImageCmd(name, dockerFile, true, "--pull=false")
+	// FROM image is not pulled if it already exists
+	// build with --pull=always (default, for trust) verifies the image is up to date
+	// no pull should be performed in this case (just verification)
+	buildCmd = buildImageCmd(name, dockerFile, true, "--pull=always")
+	s.trustedCmd(buildCmd)
+	out, _, err = runCommandWithOutput(buildCmd)
+	c.Assert(err, check.IsNil, check.Commentf(out))
+	c.Assert(out, checker.Contains, "successfully verified targets", check.Commentf("expected trust verification"))
+	c.Assert(out, checker.Not(checker.Contains), "Pulling from ", check.Commentf("unexpected pull fallback"))
+
+	// FROM image with --pull=never is neither pulled nor verified
+	buildCmd = buildImageCmd(name, dockerFile, true, "--pull=never")
 	s.trustedCmd(buildCmd)
 	out, _, err = runCommandWithOutput(buildCmd)
 	c.Assert(err, check.IsNil, check.Commentf(out))
 	c.Assert(out, checker.Not(checker.Contains), "successfully verified targets", check.Commentf("unexpected trust verification"))
 	c.Assert(out, checker.Not(checker.Contains), "Pulling from ", check.Commentf("unexpected pull"))
 
-	// FROM image with --pull=false is neither pulled nor verified
+	// FROM image with --pull=never is neither pulled nor verified
 	// gives an error if there is no local image
 	dockerCmd(c, "rmi", repoName)
-	buildCmd = buildImageCmd(name, dockerFile, true, "--pull=false")
+	buildCmd = buildImageCmd(name, dockerFile, true, "--pull=never")
 	s.trustedCmd(buildCmd)
 	out, _, err = runCommandWithOutput(buildCmd)
-	c.Assert(err, check.NotNil, check.Commentf("expected error on trusted --pull=false:\n%s", out))
+	c.Assert(err, check.NotNil, check.Commentf("expected error on trusted --pull=never:\n%s", out))
 	c.Assert(out, checker.Contains, "no such id", check.Commentf("out: %s", out))
+
+	// pull image when --pull=missing and no local image
+	buildCmd = buildImageCmd(name, dockerFile, true, "--pull=missing")
+	s.trustedCmd(buildCmd)
+	out, _, err = runCommandWithOutput(buildCmd)
+	c.Assert(err, check.IsNil, check.Commentf(out))
+	c.Assert(out, checker.Contains, "successfully verified targets", check.Commentf("expected trust verification"))
+	c.Assert(out, checker.Contains, "Pulling from ", check.Commentf("expected pull"))
+	c.Assert(out, checker.Contains, "Tagging", check.Commentf("Missing expected output on trusted build:\n%s", out))
+
+	// skip pull when --pull=missing and local image exists
+	buildCmd = buildImageCmd(name, dockerFile, true, "--pull=missing")
+	s.trustedCmd(buildCmd)
+	out, _, err = runCommandWithOutput(buildCmd)
+	c.Assert(err, check.IsNil, check.Commentf(out))
+	c.Assert(out, checker.Not(checker.Contains), "successfully verified targets", check.Commentf("unexpected trust verification"))
+	c.Assert(out, checker.Not(checker.Contains), "Pulling from ", check.Commentf("unexpected pull"))
+
+
 }

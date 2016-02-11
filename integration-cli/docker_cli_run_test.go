@@ -4177,25 +4177,44 @@ func (s *DockerSuite) TestRunNamedVolumesFromNotRemoved(c *check.C) {
 	c.Assert(strings.TrimSpace(out), checker.Equals, "test")
 }
 
-func (s *DockerSuite) TestRunWithPull(c *check.C) {
-	testRequires(c, Network)
+func (s *DockerRegistrySuite) TestRunWithPull(c *check.C) {
+	repoName := fmt.Sprintf("%v/dockercli/runpulltest", privateRegistryURL)
+	// tag the image and upload it to the private registry
+	dockerCmd(c, "tag", "busybox", repoName)
+	dockerCmd(c, "push", repoName)
+	dockerCmd(c, "rmi", repoName)
+
+	// run with --pull=never will not attempt pull fallback
+	out, _, err := dockerCmdWithError("run", "--pull=never", repoName, "true")
+	c.Assert(err, check.NotNil, check.Commentf("expected error on --pull=never:\n%s", out))
+	c.Assert(out, checker.Contains, "Unable to find image", check.Commentf("out: %s", out))
 
 	// pull image when missing (default)
-	dockerCmd(c, "rmi", "busybox")
-	out, _, err := dockerCmdWithError("run", "busybox", "true")
+	out, _, err = dockerCmdWithError("run", "--pull=default", repoName, "true")
 	c.Assert(err, check.IsNil, check.Commentf(out))
 	c.Assert(out, checker.Contains, "Pulling from ", check.Commentf("expected pull fallback"))
 
 	// no pull image if already exists
-	out, _, err = dockerCmdWithError("run", "busybox", "true")
+	out, _, err = dockerCmdWithError("run", "--pull=default", repoName, "true")
 	c.Assert(err, check.IsNil, check.Commentf(out))
 	c.Assert(out, checker.Not(checker.Contains), "Pulling from ", check.Commentf("unexpected pull fallback"))
 
-	// run with --pull still pulls the image
-	// even if the image exists on local
-	out, _, err = dockerCmdWithError("run", "--pull", "busybox", "true")
+	// pull image when missing
+	dockerCmd(c, "rmi", repoName)
+	out, _, err = dockerCmdWithError("run", "--pull=missing", repoName, "true")
 	c.Assert(err, check.IsNil, check.Commentf(out))
-	if !(strings.Contains(out, "Downloaded newer image for busybox:latest") || strings.Contains(out, "Image is up to date for busybox:latest")) {
+	c.Assert(out, checker.Contains, "Pulling from ", check.Commentf("expected pull fallback"))
+
+	// no pull image if already exists
+	out, _, err = dockerCmdWithError("run", "--pull=missing", repoName, "true")
+	c.Assert(err, check.IsNil, check.Commentf(out))
+	c.Assert(out, checker.Not(checker.Contains), "Pulling from ", check.Commentf("unexpected pull fallback"))
+
+	// run with --pull=always still pulls the image
+	// even if the image exists on local
+	out, _, err = dockerCmdWithError("run", "--pull=always", repoName, "true")
+	c.Assert(err, check.IsNil, check.Commentf(out))
+	if !(strings.Contains(out, fmt.Sprintf("Downloaded newer image for %s:latest", repoName)) || strings.Contains(out, fmt.Sprintf("Image is up to date for %s:latest", repoName))) {
 		c.Fatalf("expected to download latest image from docker hub")
 	}
 }
@@ -4203,38 +4222,66 @@ func (s *DockerSuite) TestRunWithPull(c *check.C) {
 func (s *DockerTrustSuite) TestTrustedRunWithPull(c *check.C) {
 	repoName := s.setupTrustedImage(c, "trusted-run-with-pull")
 
-	// pull image when missing (default)
-	runCmd := exec.Command(dockerBinary, "run", repoName)
+	// pull image when missing
+	runCmd := exec.Command(dockerBinary, "run", "--pull=default", repoName)
 	s.trustedCmd(runCmd)
 	out, _, err := runCommandWithOutput(runCmd)
 	c.Assert(err, check.IsNil, check.Commentf(out))
-	c.Assert(out, checker.Contains, "Pulling from ", check.Commentf("expected pull fallback"))
+	c.Assert(out, checker.Contains, "successfully verified targets", check.Commentf("expected trust verification"))
+	c.Assert(out, checker.Contains, "Pulling from ", check.Commentf("expected pull"))
+	c.Assert(out, checker.Contains, "Tagging", check.Commentf("Missing expected output on trusted run:\n%s", out))
 
 	// no pull image if already exists
-	// run with --pull (default, for trust) verifies the image is up to date
+	// run with --pull=default verifies the image is up to date
 	// no pull should be performed in this case (just verification)
-	runCmd = exec.Command(dockerBinary, "--debug", "-l", "debug", "run", "--pull", repoName)
+	runCmd = exec.Command(dockerBinary, "--debug", "-l", "debug", "run", "--pull=default", repoName)
 	s.trustedCmd(runCmd)
 	out, _, err = runCommandWithOutput(runCmd)
 	c.Assert(err, check.IsNil, check.Commentf(out))
 	c.Assert(out, checker.Contains, "successfully verified targets", check.Commentf("expected trust verification"))
 	c.Assert(out, checker.Not(checker.Contains), "Pulling from ", check.Commentf("unexpected pull fallback"))
 
-	// run with --pull=false will neither pull nor verify the image
-	runCmd = exec.Command(dockerBinary, "--debug", "-l", "debug", "run", "--pull=false", repoName)
+	// no pull image if already exists
+	// run with --pull=always (default, for trust) verifies the image is up to date
+	// no pull should be performed in this case (just verification)
+	runCmd = exec.Command(dockerBinary, "--debug", "-l", "debug", "run", "--pull=always", repoName)
+	s.trustedCmd(runCmd)
+	out, _, err = runCommandWithOutput(runCmd)
+	c.Assert(err, check.IsNil, check.Commentf(out))
+	c.Assert(out, checker.Contains, "successfully verified targets", check.Commentf("expected trust verification"))
+	c.Assert(out, checker.Not(checker.Contains), "Pulling from ", check.Commentf("unexpected pull fallback"))
+
+	// run with --pull=never will neither pull nor verify the image
+	runCmd = exec.Command(dockerBinary, "--debug", "-l", "debug", "run", "--pull=never", repoName)
 	s.trustedCmd(runCmd)
 	out, _, err = runCommandWithOutput(runCmd)
 	c.Assert(err, check.IsNil, check.Commentf(out))
 	c.Assert(out, checker.Not(checker.Contains), "successfully verified targets", check.Commentf("unexpected trust verification"))
 	c.Assert(out, checker.Not(checker.Contains), "Pulling from ", check.Commentf("unexpected pull"))
 
-	// run with --pull=false will neither pull nor verify the image
+	// run with --pull=never will neither pull nor verify the image
 	// gives an error if there is no local image
 	dockerCmd(c, "rmi", repoName)
-	runCmd = exec.Command(dockerBinary, "--debug", "-l", "debug", "run", "--pull=false", repoName)
+	runCmd = exec.Command(dockerBinary, "--debug", "-l", "debug", "run", "--pull=never", repoName)
 	s.trustedCmd(runCmd)
 	out, _, err = runCommandWithOutput(runCmd)
-	c.Assert(err, check.NotNil, check.Commentf("expected error on trusted --pull=false:\n%s", out))
+	c.Assert(err, check.NotNil, check.Commentf("expected error on trusted --pull=never:\n%s", out))
 	c.Assert(out, checker.Contains, "Unable to find image", check.Commentf("out: %s", out))
 
+	// run with --pull=missing and no local image
+	runCmd = exec.Command(dockerBinary, "--debug", "-l", "debug", "run", "--pull=missing", repoName)
+	s.trustedCmd(runCmd)
+	out, _, err = runCommandWithOutput(runCmd)
+	c.Assert(err, check.IsNil, check.Commentf(out))
+	c.Assert(out, checker.Contains, "successfully verified targets", check.Commentf("expected trust verification"))
+	c.Assert(out, checker.Contains, "Pulling from ", check.Commentf("expected pull fallback"))
+	c.Assert(out, checker.Contains, "Tagging", check.Commentf("Missing expected output on trusted run:\n%s", out))
+
+	// skip pull when --pull=missing and local image exists
+	runCmd = exec.Command(dockerBinary, "--debug", "-l", "debug", "run", "--pull=missing", repoName)
+	s.trustedCmd(runCmd)
+	out, _, err = runCommandWithOutput(runCmd)
+	c.Assert(err, check.IsNil, check.Commentf(out))
+	c.Assert(out, checker.Not(checker.Contains), "successfully verified targets", check.Commentf("unexpected trust verification"))
+	c.Assert(out, checker.Not(checker.Contains), "Pulling from ", check.Commentf("unexpected pull"))
 }
