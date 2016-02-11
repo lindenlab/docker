@@ -81,8 +81,19 @@ bundles:
 cross: build
 	$(DOCKER_RUN_DOCKER) hack/make.sh dynbinary binary cross
 
-deb: build
+build-deb: build
 	$(DOCKER_RUN_DOCKER) hack/make.sh dynbinary build-deb
+
+VERSION := $(shell cat ./VERSION)
+
+deb: build-deb packages
+	bash -c 'cp "$(CURDIR)/$(BIND_DIR)/$(VERSION)/build-deb/debian-jessie/"*.{deb,changes,build,dsc} packages/'
+
+packages:
+	mkdir packages
+
+listpackages:
+	@echo docker-engine
 
 docs:
 	$(MAKE) -C docs docs
