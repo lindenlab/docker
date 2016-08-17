@@ -35,7 +35,7 @@ func NewLoginCommand(dockerCli *client.DockerCli) *cobra.Command {
 			if len(args) > 0 {
 				opts.serverAddress = args[0]
 			} else if fqnCommands["login"] {
-				return fmt.Errorf("Missing registry name, try docker.io instead\n")
+				return fmt.Errorf("Missing registry name, try \"%s\" instead\n", IndexName)
 			}
 			return runLogin(dockerCli, opts)
 		},

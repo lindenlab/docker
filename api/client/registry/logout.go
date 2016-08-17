@@ -18,9 +18,16 @@ func NewLogoutCommand(dockerCli *client.DockerCli) *cobra.Command {
 		Long:  "Log out from a Docker registry.\nIf no server is specified, the default is defined by the daemon.",
 		Args:  cli.RequiresMaxArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			fqnCommands, err := dockerCli.QueryFQNCommands(ctx)
+			if err != nil {
+				return err
+			}
 			var serverAddress string
 			if len(args) > 0 {
 				serverAddress = args[0]
+			} else if fqnCommands["login"] {
+				return fmt.Errorf("Missing registry name, try \"%s\" instead\n", IndexName)
 			}
 			return runLogout(dockerCli, serverAddress)
 		},
