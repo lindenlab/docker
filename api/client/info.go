@@ -131,6 +131,10 @@ func (cli *DockerCli) CmdInfo(args ...string) error {
 	ioutils.FprintfIfNotEmpty(cli.out, "Https Proxy: %s\n", info.HTTPSProxy)
 	ioutils.FprintfIfNotEmpty(cli.out, "No Proxy: %s\n", info.NoProxy)
 
+	if len(info.FullyQualifiedCommands) != 0 {
+		fmt.Fprintf(cli.out, "Fully Qualified Commands: %v\n", info.FullyQualifiedCommands)
+	}
+
 	if info.IndexServerAddress != "" {
 		u := cli.configFile.AuthConfigs[info.IndexServerAddress].Username
 		if len(u) > 0 {

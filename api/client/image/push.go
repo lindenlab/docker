@@ -35,13 +35,17 @@ func runPush(dockerCli *client.DockerCli, remote string) error {
 		return err
 	}
 
+	ctx := context.Background()
+
+	if err := dockerCli.CheckFullyQualified(ctx, remote, "push"); err != nil {
+		return err
+	}
+
 	// Resolve the Repository name from fqn to RepositoryInfo
 	repoInfo, err := registry.ParseRepositoryInfo(ref)
 	if err != nil {
 		return err
 	}
-
-	ctx := context.Background()
 
 	// Resolve the Auth config relevant for this server
 	authConfig := dockerCli.ResolveAuthConfig(ctx, repoInfo.Index)

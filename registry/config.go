@@ -15,8 +15,9 @@ import (
 
 // ServiceOptions holds command line options.
 type ServiceOptions struct {
-	Mirrors            []string `json:"registry-mirrors,omitempty"`
-	InsecureRegistries []string `json:"insecure-registries,omitempty"`
+	Mirrors            []string        `json:"registry-mirrors,omitempty"`
+	InsecureRegistries []string        `json:"insecure-registries,omitempty"`
+	FullyQualifiedCmds map[string]bool `json:"force-fully-qualified,omitempty"`
 
 	// V2Only controls access to legacy registries.  If it is set to true via the
 	// command line flag the daemon will not attempt to contact v1 legacy registries
@@ -28,6 +29,11 @@ type serviceConfig struct {
 	registrytypes.ServiceConfig
 	V2Only bool
 }
+
+var (
+	// ValidFullyQualifiedCmds I can comment like a big boy
+	ValidFullyQualifiedCmds = []string{"pull", "push", "search", "login"}
+)
 
 var (
 	// DefaultNamespace is the default namespace
@@ -78,6 +84,27 @@ func (options *ServiceOptions) InstallCliFlags(cmd *flag.FlagSet, usageFn func(s
 	cmd.Var(insecureRegistries, []string{"-insecure-registry"}, usageFn("Enable insecure registry communication"))
 
 	cmd.BoolVar(&options.V2Only, []string{"-disable-legacy-registry"}, false, usageFn("Disable contacting legacy registries"))
+	fullyQualifiedCmds := opts.NewNamedStringSetOptsRef("force-fully-qualified", &options.FullyQualifiedCmds, ValidateFullyQualifiedCmd)
+	cmd.Var(fullyQualifiedCmds, []string{"-force-fully-qualified"}, usageFn(fmt.Sprintf("Force Docker commands to use fully qualified image names. Valid commands: %s,all", strings.Join(ValidFullyQualifiedCmds, ","))))
+}
+
+// ValidateFullyQualifiedCmd Validates a fully qualified command list
+func ValidateFullyQualifiedCmd(val string) ([]string, error) {
+	if val == "all" {
+		var cmds []string
+		for _, cmd := range ValidFullyQualifiedCmds {
+			if cmd != "all" {
+				cmds = append(cmds, cmd)
+			}
+		}
+		return cmds, nil
+	}
+	for _, str := range ValidFullyQualifiedCmds {
+		if val == str {
+			return []string{val}, nil
+		}
+	}
+	return []string{}, fmt.Errorf("%s is not a valid force-fully-qualified command", val)
 }
 
 // newServiceConfig returns a new instance of ServiceConfig
@@ -95,7 +122,8 @@ func newServiceConfig(options ServiceOptions) *serviceConfig {
 			IndexConfigs:          make(map[string]*registrytypes.IndexInfo, 0),
 			// Hack: Bypass setting the mirrors to IndexConfigs since they are going away
 			// and Mirrors are only for the official registry anyways.
-			Mirrors: options.Mirrors,
+			Mirrors:     options.Mirrors,
+			JobPolicies: make(map[string]*registrytypes.JobPolicy),
 		},
 		V2Only: options.V2Only,
 	}
@@ -115,6 +143,15 @@ func newServiceConfig(options ServiceOptions) *serviceConfig {
 				Official: false,
 			}
 		}
+	}
+
+	for _, k := range ValidFullyQualifiedCmds {
+		config.JobPolicies[k] = &registrytypes.JobPolicy{
+			ForceQualified: options.FullyQualifiedCmds[k],
+		}
+	}
+	config.JobPolicies["parse"] = &registrytypes.JobPolicy{
+		ForceQualified: false,
 	}
 
 	// Configure public registry.

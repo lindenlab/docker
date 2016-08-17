@@ -116,6 +116,29 @@ func TestListOptsWithValidator(t *testing.T) {
 	}
 }
 
+func TestStringSetOpts(t *testing.T) {
+	o := NewStringSetOpts(nil)
+	o.Set("foo")
+	if o.String() != "[foo]" {
+		t.Errorf("%s != [foo]", o.String())
+	}
+	o.Set("bar")
+	if o.Len() != 2 {
+		t.Errorf("%d != 2", o.Len())
+	}
+	o.Set("bar")
+	if o.Len() != 2 {
+		t.Errorf("%d != 2", o.Len())
+	}
+	if !o.Get("bar") {
+		t.Error("o.Get(\"bar\") == false")
+	}
+	o.Delete("foo")
+	if o.String() != "[bar]" {
+		t.Errorf("%s != [bar]", o.String())
+	}
+}
+
 func TestValidateDNSSearch(t *testing.T) {
 	valid := []string{
 		`.`,

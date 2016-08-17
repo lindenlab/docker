@@ -186,6 +186,10 @@ func createContainer(ctx context.Context, dockerCli *client.DockerCli, config *c
 		if apiclient.IsErrImageNotFound(err) && ref != nil {
 			fmt.Fprintf(stderr, "Unable to find image '%s' locally\n", ref.String())
 
+			if err := dockerCli.CheckFullyQualified(ctx, config.Image, "pull"); err != nil {
+				return nil, err
+			}
+
 			// we don't want to write to stdout anything apart from container.ID
 			if err = pullImage(ctx, dockerCli, config.Image, stderr); err != nil {
 				return nil, err

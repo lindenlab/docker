@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"fmt"
 	"io"
 	"strings"
 
@@ -74,6 +75,13 @@ func (daemon *Daemon) PullOnBuild(ctx context.Context, name string, authConfigs 
 }
 
 func (daemon *Daemon) pullImageWithReference(ctx context.Context, ref reference.Named, metaHeaders map[string][]string, authConfig *types.AuthConfig, outStream io.Writer) error {
+	jobPolicy, err := daemon.RegistryService.ServiceConfig().GetJobPolicy("pull")
+	if err != nil {
+		return err
+	}
+	if jobPolicy.ForceQualified && !ref.FullyQualified() {
+		return fmt.Errorf("Missing registry name, try \"%s/%s\" instead", ref.Hostname(), ref.Name())
+	}
 	// Include a buffer so that slow client connections don't affect
 	// transfer performance.
 	progressChan := make(chan progress.Progress, 100)
@@ -99,7 +107,7 @@ func (daemon *Daemon) pullImageWithReference(ctx context.Context, ref reference.
 		DownloadManager:  daemon.downloadManager,
 	}
 
-	err := distribution.Pull(ctx, ref, imagePullConfig)
+	err = distribution.Pull(ctx, ref, imagePullConfig)
 	close(progressChan)
 	<-writesDone
 	return err

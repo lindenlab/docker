@@ -2,6 +2,7 @@ package registry
 
 import (
 	"encoding/json"
+	"fmt"
 	"net"
 )
 
@@ -10,6 +11,7 @@ type ServiceConfig struct {
 	InsecureRegistryCIDRs []*NetIPNet           `json:"InsecureRegistryCIDRs"`
 	IndexConfigs          map[string]*IndexInfo `json:"IndexConfigs"`
 	Mirrors               []string
+	JobPolicies           map[string]*JobPolicy `json:"job_policies"`
 }
 
 // NetIPNet is the net.IPNet type, which can be marshalled and
@@ -31,6 +33,18 @@ func (ipnet *NetIPNet) UnmarshalJSON(b []byte) (err error) {
 		}
 	}
 	return
+}
+
+type JobPolicy struct {
+	ForceQualified bool `json:"force_qualified"`
+}
+
+func (config *ServiceConfig) GetJobPolicy(jobName string) (*JobPolicy, error) {
+	jobPolicy := config.JobPolicies[jobName]
+	if jobPolicy == nil {
+		return nil, fmt.Errorf("Job name '%s' has no policy!", jobName)
+	}
+	return jobPolicy, nil
 }
 
 // IndexInfo contains information about a registry

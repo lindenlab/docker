@@ -33,6 +33,8 @@ type Named interface {
 	Hostname() string
 	// RemoteName returns the repository component of the full name, like "library/ubuntu"
 	RemoteName() string
+	// FullyQualified returns whether or not the reference was specified fully qualified
+	FullyQualified() bool
 }
 
 // NamedTagged is an object including a name and tag.
@@ -73,7 +75,7 @@ func ParseNamed(s string) (Named, error) {
 // WithName returns a named object representing the given string. If the input
 // is invalid ErrReferenceInvalidFormat will be returned.
 func WithName(name string) (Named, error) {
-	name, err := normalize(name)
+	name, fq, err := normalize(name)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +86,7 @@ func WithName(name string) (Named, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &namedRef{r}, nil
+	return &namedRef{r, fq}, nil
 }
 
 // WithTag combines the name from "name" and the tag from "tag" to form a
@@ -94,7 +96,7 @@ func WithTag(name Named, tag string) (NamedTagged, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &taggedRef{namedRef{r}}, nil
+	return &taggedRef{namedRef{r, name.FullyQualified()}}, nil
 }
 
 // WithDigest combines the name from "name" and the digest from "digest" to form
@@ -104,11 +106,12 @@ func WithDigest(name Named, digest digest.Digest) (Canonical, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &canonicalRef{namedRef{r}}, nil
+	return &canonicalRef{namedRef{r, name.FullyQualified()}}, nil
 }
 
 type namedRef struct {
 	distreference.Named
+	fullyQualified bool
 }
 type taggedRef struct {
 	namedRef
@@ -118,16 +121,19 @@ type canonicalRef struct {
 }
 
 func (r *namedRef) FullName() string {
-	hostname, remoteName := splitHostname(r.Name())
+	hostname, remoteName, _ := splitHostname(r.Name())
 	return hostname + "/" + remoteName
 }
 func (r *namedRef) Hostname() string {
-	hostname, _ := splitHostname(r.Name())
+	hostname, _, _ := splitHostname(r.Name())
 	return hostname
 }
 func (r *namedRef) RemoteName() string {
-	_, remoteName := splitHostname(r.Name())
+	_, remoteName, _ := splitHostname(r.Name())
 	return remoteName
+}
+func (r *namedRef) FullyQualified() bool {
+	return r.fullyQualified
 }
 func (r *taggedRef) Tag() string {
 	return r.namedRef.Named.(distreference.NamedTagged).Tag()
@@ -171,12 +177,14 @@ func ParseIDOrReference(idOrRef string) (digest.Digest, Named, error) {
 // splitHostname splits a repository name to hostname and remotename string.
 // If no valid hostname is found, the default hostname is used. Repository name
 // needs to be already validated before.
-func splitHostname(name string) (hostname, remoteName string) {
+func splitHostname(name string) (hostname, remoteName string, fq bool) {
 	i := strings.IndexRune(name, '/')
 	if i == -1 || (!strings.ContainsAny(name[:i], ".:") && name[:i] != "localhost") {
 		hostname, remoteName = DefaultHostname, name
+		fq = false
 	} else {
 		hostname, remoteName = name[:i], name[i+1:]
+		fq = true
 	}
 	if hostname == LegacyDefaultHostname {
 		hostname = DefaultHostname
@@ -189,18 +197,18 @@ func splitHostname(name string) (hostname, remoteName string) {
 
 // normalize returns a repository name in its normalized form, meaning it
 // will not contain default hostname nor library/ prefix for official images.
-func normalize(name string) (string, error) {
-	host, remoteName := splitHostname(name)
+func normalize(name string) (string, bool, error) {
+	host, remoteName, fq := splitHostname(name)
 	if strings.ToLower(remoteName) != remoteName {
-		return "", errors.New("invalid reference format: repository name must be lowercase")
+		return "", fq, errors.New("invalid reference format: repository name must be lowercase")
 	}
 	if host == DefaultHostname {
 		if strings.HasPrefix(remoteName, DefaultRepoPrefix) {
-			return strings.TrimPrefix(remoteName, DefaultRepoPrefix), nil
+			return strings.TrimPrefix(remoteName, DefaultRepoPrefix), fq, nil
 		}
-		return remoteName, nil
+		return remoteName, fq, nil
 	}
-	return name, nil
+	return name, fq, nil
 }
 
 func validateName(name string) error {
