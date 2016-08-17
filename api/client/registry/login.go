@@ -8,6 +8,8 @@ import (
 	"github.com/docker/docker/api/client"
 	"github.com/docker/docker/cli"
 	"github.com/spf13/cobra"
+
+	dockerregistry "github.com/docker/docker/registry"
 )
 
 type loginOptions struct {
@@ -35,7 +37,7 @@ func NewLoginCommand(dockerCli *client.DockerCli) *cobra.Command {
 			if len(args) > 0 {
 				opts.serverAddress = args[0]
 			} else if fqnCommands["login"] {
-				return fmt.Errorf("Missing registry name, try \"%s\" instead\n", IndexName)
+				return fmt.Errorf("Missing registry name, try \"%s\" instead\n", dockerregistry.IndexName)
 			}
 			return runLogin(dockerCli, opts)
 		},
