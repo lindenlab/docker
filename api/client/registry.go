@@ -113,6 +113,8 @@ func (cli *DockerCli) ConfigureAuth(flUser, flPassword, serverAddress string, is
 		if isDefaultRegistry {
 			// if this is a default registry (docker hub), then display the following message.
 			fmt.Fprintln(cli.out, "Login with your Docker ID to push and pull images from Docker Hub. If you don't have a Docker ID, head over to https://hub.docker.com to create one.")
+		} else {
+			fmt.Fprintf(cli.out, "Server: %s\n", serverAddress)
 		}
 		cli.promptWithDefault("Username", authconfig.Username)
 		flUser = readInput(cli.in, cli.out)
