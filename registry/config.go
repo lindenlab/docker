@@ -84,7 +84,9 @@ func (options *ServiceOptions) InstallCliFlags(cmd *flag.FlagSet, usageFn func(s
 	cmd.Var(insecureRegistries, []string{"-insecure-registry"}, usageFn("Enable insecure registry communication"))
 
 	cmd.BoolVar(&options.V2Only, []string{"-disable-legacy-registry"}, false, usageFn("Disable contacting legacy registries"))
-	fullyQualifiedCmds := opts.NewNamedStringSetOptsRef("force-fully-qualified", &options.FullyQualifiedCmds, ValidateFullyQualifiedCmd)
+
+	options.FullyQualifiedCmds = make(map[string]bool)
+	fullyQualifiedCmds := opts.NewNamedStringSetOptsRef("force-fully-qualified", options.FullyQualifiedCmds, ValidateFullyQualifiedCmd)
 	cmd.Var(fullyQualifiedCmds, []string{"-force-fully-qualified"}, usageFn(fmt.Sprintf("Force Docker commands to use fully qualified image names. Valid commands: %s,all", strings.Join(ValidFullyQualifiedCmds, ","))))
 }
 

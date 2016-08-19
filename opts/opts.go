@@ -211,16 +211,21 @@ func (o *NamedMapOpts) Name() string {
 
 // StringSetOpts type
 type StringSetOpts struct {
-	values    *map[string]bool
+	values    map[string]bool
 	validator ValidatorFctListType
 }
 
-func NewStringSetOpts(validator ValidatorFctListType) StringSetOpts {
-	values := make(map[string]bool)
-	return *NewStringSetOptsRef(&values, validator)
+func NewStringSetOpts(values map[string]bool, validator ValidatorFctListType) *StringSetOpts {
+	if values == nil {
+		values = make(map[string]bool)
+	}
+	return &StringSetOpts{
+		values:		values,
+		validator:	validator,
+	}
 }
 
-func NewStringSetOptsRef(values *map[string]bool, validator ValidatorFctListType) *StringSetOpts {
+func NewStringSetOptsRef(values map[string]bool, validator ValidatorFctListType) *StringSetOpts {
 	return &StringSetOpts{
 		values:    values,
 		validator: validator,
@@ -232,8 +237,8 @@ func (opts *StringSetOpts) String() string {
 }
 
 func (opts *StringSetOpts) GetList() []string {
-	keys := make([]string, 0, len(*opts.values))
-	for k := range *opts.values {
+	keys := make([]string, 0, len(opts.values))
+	for k := range opts.values {
 		keys = append(keys, k)
 	}
 	return keys
@@ -255,28 +260,28 @@ func (opts *StringSetOpts) Set(value string) error {
 		values = validated
 	}
 	for _, v := range values {
-		(*opts.values)[v] = true
+		(opts.values)[v] = true
 	}
 	return nil
 }
 
 // Delete remove the given element from the slice.
 func (opts *StringSetOpts) Delete(key string) {
-	delete((*opts.values), key)
+	delete((opts.values), key)
 }
 
 func (opts *StringSetOpts) GetMap() map[string]bool {
-	return (*opts.values)
+	return (opts.values)
 }
 
 // Get checks the existence of the given key.
 func (opts *StringSetOpts) Get(key string) bool {
-	return (*opts.values)[key]
+	return (opts.values)[key]
 }
 
 // Len returns the amount of element in the slice.
 func (opts *StringSetOpts) Len() int {
-	return len((*opts.values))
+	return len((opts.values))
 }
 
 type NamedStringSetOpts struct {
@@ -286,10 +291,10 @@ type NamedStringSetOpts struct {
 
 var _ NamedOption = &NamedStringSetOpts{}
 
-func NewNamedStringSetOptsRef(name string, values *map[string]bool, validator ValidatorFctListType) *NamedStringSetOpts {
+func NewNamedStringSetOptsRef(name string, values map[string]bool, validator ValidatorFctListType) *NamedStringSetOpts {
 	return &NamedStringSetOpts{
 		name:          name,
-		StringSetOpts: *NewStringSetOptsRef(values, validator),
+		StringSetOpts: *NewStringSetOpts(values, validator),
 	}
 }
 
