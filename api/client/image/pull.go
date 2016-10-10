@@ -84,6 +84,15 @@ func runPull(dockerCli *client.DockerCli, opts pullOptions) error {
 		return dockerCli.TrustedPull(ctx, repoInfo, registryRef, authConfig, requestPrivilege)
 	}
 
-	return dockerCli.ImagePullPrivileged(ctx, authConfig, distributionRef.FullName(), requestPrivilege, opts.all)
-
+	// Hack to undo the default hostname being stripped by reference.normalize(). Since we can't signal
+	// the daemon that the Image was fully qualified, we have to send the full string in. This should
+	// also check that pull is forced-fully-qualified, but no real need here, since we set every daemon
+	// to all...
+        var refstring string
+        if distributionRef.FullyQualified() && (distributionRef.Hostname() == reference.DefaultHostname) {
+                refstring = distributionRef.Hostname() + "/" + distributionRef.String()
+        } else {
+                refstring = distributionRef.String()
+        }
+        return dockerCli.ImagePullPrivileged(ctx, authConfig, refstring, requestPrivilege, opts.all)
 }
