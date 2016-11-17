@@ -82,8 +82,19 @@ win: build ## cross build the binary for windows
 tgz: build ## build the archives (.zip on windows and .tgz\notherwise) containing the binaries
 	$(DOCKER_RUN_DOCKER) hack/make.sh dynbinary binary cross tgz
 
-deb: build  ## build the deb packages
+build-deb: build
 	$(DOCKER_RUN_DOCKER) hack/make.sh dynbinary build-deb
+
+VERSION := $(shell cat ./VERSION)
+
+deb: build-deb packages ## build the deb packages
+	bash -c 'cp "$(CURDIR)/$(BIND_DIR)/$(VERSION)/build-deb/debian-jessie/"*.{deb,changes,build,dsc} packages/'
+
+packages:
+	mkdir packages
+
+listpackages:
+	@echo docker-engine
 
 docs: ## build the docs
 	$(MAKE) -C docs docs
