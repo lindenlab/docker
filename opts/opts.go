@@ -209,6 +209,95 @@ func (o *NamedMapOpts) Name() string {
 	return o.name
 }
 
+// StringSetOpts type
+type StringSetOpts struct {
+	values    *map[string]bool
+	validator ValidatorFctListType
+}
+
+func NewStringSetOpts(validator ValidatorFctListType) StringSetOpts {
+	values := make(map[string]bool)
+	return *NewStringSetOptsRef(&values, validator)
+}
+
+func NewStringSetOptsRef(values *map[string]bool, validator ValidatorFctListType) *StringSetOpts {
+	return &StringSetOpts{
+		values:    values,
+		validator: validator,
+	}
+}
+
+func (opts *StringSetOpts) String() string {
+	return fmt.Sprintf("%v", opts.GetList())
+}
+
+func (opts *StringSetOpts) GetList() []string {
+	keys := make([]string, 0, len(*opts.values))
+	for k := range *opts.values {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+// Set validates if needed the input value and add it to the
+// internal map.
+func (opts *StringSetOpts) Set(value string) error {
+	values := strings.Split(value, ",")
+	if opts.validator != nil {
+		var validated []string
+		for _, in := range values {
+			v, err := opts.validator(in)
+			if err != nil {
+				return err
+			}
+			validated = append(validated, v...)
+		}
+		values = validated
+	}
+	for _, v := range values {
+		(*opts.values)[v] = true
+	}
+	return nil
+}
+
+// Delete remove the given element from the slice.
+func (opts *StringSetOpts) Delete(key string) {
+	delete((*opts.values), key)
+}
+
+func (opts *StringSetOpts) GetMap() map[string]bool {
+	return (*opts.values)
+}
+
+// Get checks the existence of the given key.
+func (opts *StringSetOpts) Get(key string) bool {
+	return (*opts.values)[key]
+}
+
+// Len returns the amount of element in the slice.
+func (opts *StringSetOpts) Len() int {
+	return len((*opts.values))
+}
+
+type NamedStringSetOpts struct {
+	name string
+	StringSetOpts
+}
+
+var _ NamedOption = &NamedStringSetOpts{}
+
+func NewNamedStringSetOptsRef(name string, values *map[string]bool, validator ValidatorFctListType) *NamedStringSetOpts {
+	return &NamedStringSetOpts{
+		name:          name,
+		StringSetOpts: *NewStringSetOptsRef(values, validator),
+	}
+}
+
+// Name returns the name of the NamedStringSetOpts in the configuration.
+func (o *NamedStringSetOpts) Name() string {
+	return o.name
+}
+
 // ValidatorFctType defines a validator function that returns a validated string and/or an error.
 type ValidatorFctType func(val string) (string, error)
 

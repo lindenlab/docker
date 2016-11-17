@@ -45,6 +45,12 @@ func runPull(dockerCli *client.DockerCli, opts pullOptions) error {
 	if err != nil {
 		return err
 	}
+
+	ctx := context.Background()
+
+	if err := dockerCli.CheckFullyQualified(ctx, opts.remote, "pull"); err != nil {
+		return err
+	}
 	if opts.all && !reference.IsNameOnly(distributionRef) {
 		return errors.New("tag can't be used with --all-tags/-a")
 	}
@@ -69,8 +75,6 @@ func runPull(dockerCli *client.DockerCli, opts pullOptions) error {
 	if err != nil {
 		return err
 	}
-
-	ctx := context.Background()
 
 	authConfig := dockerCli.ResolveAuthConfig(ctx, repoInfo.Index)
 	requestPrivilege := dockerCli.RegistryAuthenticationPrivilegedFunc(repoInfo.Index, "pull")

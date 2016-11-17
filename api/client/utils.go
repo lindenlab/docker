@@ -16,6 +16,7 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/pkg/signal"
 	"github.com/docker/docker/pkg/term"
+	"github.com/docker/docker/reference"
 	"github.com/docker/engine-api/client"
 	"github.com/docker/engine-api/types"
 )
@@ -62,6 +63,46 @@ func (cli *DockerCli) getExecExitCode(ctx context.Context, execID string) (bool,
 	}
 
 	return resp.Running, resp.ExitCode, nil
+}
+
+// QueryFQNCommands performs an /info request to inspect daemon
+// job policy settings.
+func (cli *DockerCli) QueryFQNCommands(ctx context.Context) (map[string]bool, error) {
+	info, err := cli.client.Info(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	fqnCommands := make(map[string]bool)
+	for _, cmd := range info.FullyQualifiedCommands {
+		fqnCommands[cmd] = true
+	}
+
+	return fqnCommands, nil
+}
+
+// CheckFullyQualified performs an /info request and checks
+// fully qualified settings.
+func (cli *DockerCli) CheckFullyQualified(ctx context.Context, name, context string) error {
+	ref, err := reference.ParseNamed(name)
+	if err != nil {
+		return err
+	}
+
+	fqnCommands, err := cli.QueryFQNCommands(ctx)
+	if err != nil {
+		return err
+	}
+
+	fqn, ok := fqnCommands[context]
+	if !ok {
+		return fmt.Errorf("Command '%s' has no policy!", context)
+	}
+
+	if fqn && !ref.FullyQualified() {
+		return fmt.Errorf("Missing registry name, try \"%s/%s\" instead", ref.Hostname(), ref.Name())
+	}
+	return nil
 }
 
 // MonitorTtySize updates the container tty size when the terminal tty changes size

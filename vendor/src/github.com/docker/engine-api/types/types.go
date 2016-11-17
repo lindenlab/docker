@@ -259,7 +259,9 @@ type Info struct {
 	// LiveRestoreEnabled determines whether containers should be kept
 	// running when the daemon is shutdown or upon daemon start if
 	// running containers are detected
-	LiveRestoreEnabled bool
+	LiveRestoreEnabled     bool
+	FullyQualifiedCommands []string
+	IndexServerName        string
 }
 
 // PluginsInfo is a temp struct holding Plugins name
