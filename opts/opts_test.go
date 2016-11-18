@@ -117,7 +117,7 @@ func TestListOptsWithValidator(t *testing.T) {
 }
 
 func TestStringSetOpts(t *testing.T) {
-	o := NewStringSetOpts(nil)
+	o := NewStringSetOpts(nil, nil)
 	o.Set("foo")
 	if o.String() != "[foo]" {
 		t.Errorf("%s != [foo]", o.String())
