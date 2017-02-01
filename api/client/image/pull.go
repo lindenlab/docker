@@ -45,6 +45,12 @@ func runPull(dockerCli *client.DockerCli, opts pullOptions) error {
 	if err != nil {
 		return err
 	}
+
+	ctx := context.Background()
+
+	if err := dockerCli.CheckFullyQualified(ctx, opts.remote, "pull"); err != nil {
+		return err
+	}
 	if opts.all && !reference.IsNameOnly(distributionRef) {
 		return errors.New("tag can't be used with --all-tags/-a")
 	}
@@ -70,8 +76,6 @@ func runPull(dockerCli *client.DockerCli, opts pullOptions) error {
 		return err
 	}
 
-	ctx := context.Background()
-
 	authConfig := dockerCli.ResolveAuthConfig(ctx, repoInfo.Index)
 	requestPrivilege := dockerCli.RegistryAuthenticationPrivilegedFunc(repoInfo.Index, "pull")
 
@@ -79,7 +83,17 @@ func runPull(dockerCli *client.DockerCli, opts pullOptions) error {
 		// Check if tag is digest
 		err = dockerCli.TrustedPull(ctx, repoInfo, registryRef, authConfig, requestPrivilege)
 	} else {
-		err = dockerCli.ImagePullPrivileged(ctx, authConfig, distributionRef.String(), requestPrivilege, opts.all)
+		// Hack to undo the default hostname being stripped by reference.normalize(). Since we can't signal
+		// the daemon that the Image was fully qualified, we have to send the full string in. This should
+		// also check that pull is forced-fully-qualified, but no real need here, since we set every daemon
+		// to all...
+		var refstring string
+		if distributionRef.FullyQualified() && (distributionRef.Hostname() == reference.DefaultHostname) {
+			refstring = distributionRef.Hostname() + "/" + distributionRef.String()
+		} else {
+			refstring = distributionRef.String()
+		}
+		err = dockerCli.ImagePullPrivileged(ctx, authConfig, refstring, requestPrivilege, opts.all)
 	}
 	if err != nil {
 		return err

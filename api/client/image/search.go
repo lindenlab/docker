@@ -66,6 +66,10 @@ func runSearch(dockerCli *client.DockerCli, opts searchOptions) error {
 
 	ctx := context.Background()
 
+	if err := dockerCli.CheckFullyQualified(ctx, opts.term, "search"); err != nil {
+		return err
+	}
+
 	authConfig := dockerCli.ResolveAuthConfig(ctx, indexInfo)
 	requestPrivilege := dockerCli.RegistryAuthenticationPrivilegedFunc(indexInfo, "search")
 
