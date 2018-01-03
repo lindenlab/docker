@@ -396,8 +396,7 @@ func BuildFromConfig(config *container.Config, changes []string) (*container.Con
 	}
 
 	dispatchRequest := newDispatchRequest(b, dockerfile.EscapeToken, nil, newBuildArgs(b.options.BuildArgs), newStagesBuildResults())
-	// We make mutations to the configuration, ensure we have a copy
-	dispatchRequest.state.runConfig = copyRunConfig(config)
+	dispatchRequest.state.runConfig = config
 	dispatchRequest.state.imageID = config.Image
 	for _, cmd := range commands {
 		err := dispatch(dispatchRequest, cmd)

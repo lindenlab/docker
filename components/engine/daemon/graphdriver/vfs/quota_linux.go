@@ -1,20 +1,21 @@
+// +build linux
+
 package vfs
 
-import (
-	"github.com/docker/docker/daemon/graphdriver/quota"
-	"github.com/sirupsen/logrus"
-)
+import "github.com/docker/docker/daemon/graphdriver/quota"
 
 type driverQuota struct {
 	quotaCtl *quota.Control
 }
 
-func setupDriverQuota(driver *Driver) {
+func setupDriverQuota(driver *Driver) error {
 	if quotaCtl, err := quota.NewControl(driver.home); err == nil {
 		driver.quotaCtl = quotaCtl
 	} else if err != quota.ErrQuotaNotSupported {
-		logrus.Warnf("Unable to setup quota: %v\n", err)
+		return err
 	}
+
+	return nil
 }
 
 func (d *Driver) setupQuota(dir string, size uint64) error {

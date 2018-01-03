@@ -193,7 +193,6 @@ func dockerPreRun(opts *cliflags.ClientOptions) {
 
 type versionDetails interface {
 	Client() client.APIClient
-	ClientInfo() command.ClientInfo
 	ServerInfo() command.ServerInfo
 }
 
@@ -201,17 +200,11 @@ func hideUnsupportedFeatures(cmd *cobra.Command, details versionDetails) {
 	clientVersion := details.Client().ClientVersion()
 	osType := details.ServerInfo().OSType
 	hasExperimental := details.ServerInfo().HasExperimental
-	hasExperimentalCLI := details.ClientInfo().HasExperimental
 
 	cmd.Flags().VisitAll(func(f *pflag.Flag) {
 		// hide experimental flags
 		if !hasExperimental {
 			if _, ok := f.Annotations["experimental"]; ok {
-				f.Hidden = true
-			}
-		}
-		if !hasExperimentalCLI {
-			if _, ok := f.Annotations["experimentalCLI"]; ok {
 				f.Hidden = true
 			}
 		}
@@ -229,11 +222,6 @@ func hideUnsupportedFeatures(cmd *cobra.Command, details versionDetails) {
 				subcmd.Hidden = true
 			}
 		}
-		if !hasExperimentalCLI {
-			if _, ok := subcmd.Annotations["experimentalCLI"]; ok {
-				subcmd.Hidden = true
-			}
-		}
 
 		// hide subcommands not supported by the server
 		if subcmdVersion, ok := subcmd.Annotations["version"]; ok && versions.LessThan(clientVersion, subcmdVersion) {
@@ -246,7 +234,6 @@ func isSupported(cmd *cobra.Command, details versionDetails) error {
 	clientVersion := details.Client().ClientVersion()
 	osType := details.ServerInfo().OSType
 	hasExperimental := details.ServerInfo().HasExperimental
-	hasExperimentalCLI := details.ClientInfo().HasExperimental
 
 	// Check recursively so that, e.g., `docker stack ls` returns the same output as `docker stack`
 	for curr := cmd; curr != nil; curr = curr.Parent() {
@@ -255,9 +242,6 @@ func isSupported(cmd *cobra.Command, details versionDetails) error {
 		}
 		if _, ok := curr.Annotations["experimental"]; ok && !hasExperimental {
 			return fmt.Errorf("%s is only supported on a Docker daemon with experimental features enabled", cmd.CommandPath())
-		}
-		if _, ok := curr.Annotations["experimentalCLI"]; ok && !hasExperimentalCLI {
-			return fmt.Errorf("%s is only supported when experimental cli features are enabled", cmd.CommandPath())
 		}
 	}
 
@@ -275,9 +259,6 @@ func isSupported(cmd *cobra.Command, details versionDetails) error {
 			}
 			if _, ok := f.Annotations["experimental"]; ok && !hasExperimental {
 				errs = append(errs, fmt.Sprintf("\"--%s\" is only supported on a Docker daemon with experimental features enabled", f.Name))
-			}
-			if _, ok := f.Annotations["experimentalCLI"]; ok && !hasExperimentalCLI {
-				errs = append(errs, fmt.Sprintf("\"--%s\" is only supported when experimental cli features are enabled", f.Name))
 			}
 		}
 	})

@@ -32,8 +32,7 @@ func SetupConfigFile(t *testing.T) fs.Dir {
 			"https://notary-server:4443": {
 				"auth": "ZWlhaXM6cGFzc3dvcmQK"
 			}
-		},
-		"experimental": "enabled"
+		}
 	}
 	`))
 	return *dir
